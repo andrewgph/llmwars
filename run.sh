@@ -3,11 +3,33 @@
 # Get the directory where the script is located
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
+# Parse command line arguments
+NUM_GAMES=1  # Default value
+AGENT_CONFIGS=()  # Initialize empty array
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --num-games)
+            NUM_GAMES="$2"
+            shift 2
+            ;;
+        *)
+            AGENT_CONFIGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Check if at least one agent config is provided
+if [ ${#AGENT_CONFIGS[@]} -lt 1 ]; then
+    echo "Usage: $0 [--num-games N] <agent1_config.json> [agent2_config.json] [agent3_config.json] ..."
+    echo "Options:"
+    echo "  --num-games N    Number of parallel games to run (default: 10)"
+    echo "Provide at least one agent configuration file"
+    exit 1
+fi
+
 # Build the Docker image once
 docker build -t promptwars .
-
-# Number of parallel games to run
-NUM_GAMES=10
 
 # Create a unique run directory
 RUN_DIR="$SCRIPT_DIR/game_runs/run_$(date +%Y%m%d_%H%M%S)"
@@ -25,7 +47,7 @@ for i in $(seq 1 $NUM_GAMES); do
     docker run --rm \
         -v "$GAME_DIR:/shared_logs" \
         promptwars \
-        claude_sonnet_agent.json random_kill_agent.json > "$GAME_DIR/game.log" 2> "$GAME_DIR/game_err.log" &
+        "${AGENT_CONFIGS[@]}" > "$GAME_DIR/game.log" 2> "$GAME_DIR/game_err.log" &
 done
 
 # Wait for all background processes to complete
