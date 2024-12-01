@@ -32,7 +32,7 @@ def analyze_game_results(base_dir):
     game_dirs = [d for d in Path(base_dir).glob('game_*') if d.is_dir()]
     
     # Store statistics for each agent
-    stats = defaultdict(lambda: {'wins': 0, 'losses': 0, 'total': 0})
+    stats = defaultdict(lambda: {'wins': 0, 'losses': 0, 'total': 0, 'id': None})
     
     for game_dir in game_dirs:
         result_file = game_dir / 'game_result.json'
@@ -48,29 +48,32 @@ def analyze_game_results(base_dir):
             winners = [agent for agent in agents if not agent['was_stopped']]
             losers = [agent for agent in agents if agent['was_stopped']]
             
-            # Update statistics with agent name + ID
+            # Update statistics with separate name and ID
             for agent in winners:
-                agent_key = f"{agent['name']} ({agent['id']})"  # Include ID in the key
+                agent_key = agent['name']  # Use only name as key
                 stats[agent_key]['wins'] += 1
                 stats[agent_key]['total'] += 1
+                stats[agent_key]['id'] = agent['id']  # Store ID separately
                 
             for agent in losers:
-                agent_key = f"{agent['name']} ({agent['id']})"  # Include ID in the key
+                agent_key = agent['name']  # Use only name as key
                 stats[agent_key]['losses'] += 1
                 stats[agent_key]['total'] += 1
+                stats[agent_key]['id'] = agent['id']  # Store ID separately
                 
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Error reading {result_file}: {e}")
             continue
 
     # Prepare table data
-    headers = ['Agent', 'Wins', 'Losses', 'Total Games', 'Win Rate']
+    headers = ['Agent', 'ID', 'Wins', 'Losses', 'Total Games', 'Win Rate']
     table_data = []
     
     for agent_name, data in stats.items():
         win_rate = (data['wins'] / data['total'] * 100) if data['total'] > 0 else 0
         table_data.append([
             agent_name,
+            data['id'],
             data['wins'],
             data['losses'],
             data['total'],
@@ -78,7 +81,7 @@ def analyze_game_results(base_dir):
         ])
     
     # Sort by win rate (descending)
-    table_data.sort(key=lambda x: float(x[4].rstrip('%')), reverse=True)
+    table_data.sort(key=lambda x: float(x[5].rstrip('%')), reverse=True)
     
     # Print results
     print("\nGame Results Summary")
