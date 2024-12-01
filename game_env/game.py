@@ -45,7 +45,8 @@ def start_agent(agent_id: int, agent_config_file: str) -> Agent:
         env={
             "PYTHONPATH": os.environ["PYTHONPATH"],
             "SHARED_LOGS": os.environ["SHARED_LOGS"],
-            "AGENT_SPACE": os.environ["AGENT_SPACE"]
+            "AGENT_SPACE": os.environ["AGENT_SPACE"],
+            "AGENT_API_KEY": agent_config.get("api_key", "")
         }
     )
     return Agent(id=agent_id, name=name, path=agent_path, process=process, 
@@ -81,7 +82,8 @@ def start_services():
         universal_newlines=True,
         env={
             "PYTHONPATH": os.environ["PYTHONPATH"],
-            "SHARED_LOGS": os.environ["SHARED_LOGS"]
+            "SHARED_LOGS": os.environ["SHARED_LOGS"],
+            "ROOT_SPACE": os.environ["ROOT_SPACE"]
         }
     )
     

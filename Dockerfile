@@ -28,6 +28,7 @@ RUN pip install -r requirements.txt
 
 # Copy root space files
 COPY game_env/* ./
+COPY agent_configs ./agent_configs
 COPY .env ./
 
 # Copy agent space files
