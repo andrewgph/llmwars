@@ -4,3 +4,5 @@ python-dotenv
 flask
 requests
 watchdog
+openai
+google-generativeai

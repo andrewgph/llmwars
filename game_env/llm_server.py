@@ -4,11 +4,17 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 import json
 from datetime import datetime
+from openai import OpenAI
+import google.generativeai as genai
 
 load_dotenv()
 
 app = Flask(__name__)
+
+# Setup LLM clients
 claude_client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Store agent configurations
 agent_configs = {}
@@ -26,6 +32,26 @@ def load_agent_configs():
 
 # Replace @app.before_first_request with a flag and before_request
 _configs_loaded = False
+
+def generate_claude_response(prompt, model_name):
+    response = claude_client.messages.create(
+        max_tokens=8192,
+        messages=[{"role": "user", "content": prompt}],
+        model=model_name,
+    )
+    return response.content[0].text
+
+def generate_openai_response(prompt, model_name):
+    response = openai_client.chat.completions.create(
+        model=model_name,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content
+
+def generate_gemini_response(prompt, model_name):
+    model = genai.GenerativeModel(model_name=model_name)
+    response = model.generate_content(prompt)
+    return response.text
 
 @app.before_request
 def setup():
@@ -47,12 +73,14 @@ def generate():
     print(f"Generating response for agent: {agent_config['name']}, using model: {agent_config['model']}")
     
     try:
-        response = claude_client.messages.create(
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-            model=agent_config['model'],
-        )
-        response_text = response.content[0].text
+        if agent_config['provider'] == 'anthropic':
+            response_text = generate_claude_response(prompt, agent_config['model'])
+        elif agent_config['provider'] == 'openai':
+            response_text = generate_openai_response(prompt, agent_config['model'])
+        elif agent_config['provider'] == 'gemini':
+            response_text = generate_gemini_response(prompt, agent_config['model'])
+        else:
+            return jsonify({"error": "Invalid provider"}), 400
 
         # Log the prompt and response
         log_entry = {

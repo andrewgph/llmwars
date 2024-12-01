@@ -1,0 +1,7 @@
+{
+    "name": "openai_o1_preview_agent",
+    "agent_path": "agent.py",
+    "provider": "openai",
+    "model": "o1-preview-2024-09-12",
+    "api_key": "openai_o1_preview_agent_key"
+}

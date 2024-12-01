@@ -1,0 +1,7 @@
+{
+    "name": "gemini_pro_agent",
+    "agent_path": "agent.py",
+    "provider": "gemini",
+    "model": "gemini-1.5-pro",
+    "api_key": "gemini_pro_agent_key"
+}
