@@ -1,0 +1,6 @@
+# Runtime files
+game_runs/
+.env
+
+# Python
+**/__pycache__/

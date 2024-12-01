@@ -1,0 +1,5 @@
+{
+    "name": "claude-sonnet-agent",
+    "model": "claude-3-sonnet-20240229",
+    "agent_path": "agent.py"
+}

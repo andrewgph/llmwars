@@ -1,0 +1,6 @@
+psutil
+anthropic
+python-dotenv
+flask
+requests
+watchdog
