@@ -33,24 +33,32 @@ def load_agent_configs():
 # Replace @app.before_first_request with a flag and before_request
 _configs_loaded = False
 
-def generate_claude_response(prompt, model_name):
+def generate_claude_response(messages, model_name):
     response = claude_client.messages.create(
         max_tokens=8192,
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         model=model_name,
     )
     return response.content[0].text
 
-def generate_openai_response(prompt, model_name):
+def generate_openai_response(messages, model_name):
     response = openai_client.chat.completions.create(
         model=model_name,
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
     )
     return response.choices[0].message.content
 
-def generate_gemini_response(prompt, model_name):
+def generate_gemini_response(messages, model_name):
     model = genai.GenerativeModel(model_name=model_name)
-    response = model.generate_content(prompt)
+    # Convert OpenAI-style messages to Gemini format
+    gemini_messages = [
+        {
+            "role": msg["role"],
+            "parts": [msg["content"]]
+        }
+        for msg in messages
+    ]
+    response = model.generate_content(gemini_messages)
     return response.text
 
 @app.before_request
@@ -63,30 +71,33 @@ def setup():
 @app.route('/generate', methods=['POST'])
 def generate():
     data = request.json
-    prompt = data.get('prompt')
+    messages = data.get('messages', [])
     api_key = request.headers.get('X-Agent-API-Key')
 
     if not api_key or api_key not in agent_configs:
         return jsonify({"error": "Invalid or missing API key"}), 401
+
+    if not messages:
+        return jsonify({"error": "No messages provided"}), 400
 
     agent_config = agent_configs[api_key]
     print(f"Generating response for agent: {agent_config['name']}, using model: {agent_config['model']}")
     
     try:
         if agent_config['provider'] == 'anthropic':
-            response_text = generate_claude_response(prompt, agent_config['model'])
+            response_text = generate_claude_response(messages, agent_config['model'])
         elif agent_config['provider'] == 'openai':
-            response_text = generate_openai_response(prompt, agent_config['model'])
+            response_text = generate_openai_response(messages, agent_config['model'])
         elif agent_config['provider'] == 'gemini':
-            response_text = generate_gemini_response(prompt, agent_config['model'])
+            response_text = generate_gemini_response(messages, agent_config['model'])
         else:
             return jsonify({"error": "Invalid provider"}), 400
 
-        # Log the prompt and response
+        # Log the messages and response
         log_entry = {
             "timestamp": datetime.now().isoformat(),
             "agent_name": agent_config['name'],
-            "prompt": prompt,
+            "messages": messages,
             "response": response_text
         }
         

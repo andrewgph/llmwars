@@ -37,12 +37,21 @@ def generate_prompt():
     current_script_path = os.path.abspath(__file__)
     agent_code = open(current_script_path, "r").read()
     requirements_txt = open("requirements.txt", "r").read()
-    return GAME_PROMPT.format(agent_code=agent_code, requirements_txt=requirements_txt)
+    
+    user_message = {
+        "role": "user",
+        "content": GAME_PROMPT.format(
+            agent_code=agent_code,
+            requirements_txt=requirements_txt
+        )
+    }
+    
+    return [user_message]
 
 def spawn_new_process():
-    prompt = generate_prompt()
+    messages = generate_prompt()
     
-    generated_code = llm_client.generate(prompt)
+    generated_code = llm_client.generate(messages)
     if not generated_code:
         print("Failed to generate code")
         return
