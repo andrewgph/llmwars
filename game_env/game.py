@@ -7,9 +7,10 @@ import signal
 from dataclasses import dataclass
 from typing import List
 import threading
+import argparse
 
 AGENT_USER = "agent"
-GAME_TIMEOUT_SECONDS = 30
+
 
 @dataclass
 class Agent:
@@ -52,7 +53,7 @@ def start_agent(agent_id: int, agent_config_file: str) -> Agent:
     return Agent(id=agent_id, name=name, path=agent_path, process=process, 
                 stdout_file=stdout_file, stderr_file=stderr_file)
 
-def game_loop(agents: List[Agent]):
+def game_loop(agents: List[Agent], timeout_seconds: int):
     start_time = time.time()
 
     # Monitor processes until any one terminates
@@ -69,7 +70,7 @@ def game_loop(agents: List[Agent]):
 
                 return
 
-        if time.time() - start_time > GAME_TIMEOUT_SECONDS:
+        if time.time() - start_time > timeout_seconds:
             print("Game timeout reached. Exiting.", flush=True)
             return
 
@@ -103,6 +104,15 @@ def start_services():
     return llm_server, file_monitor
 
 def main():
+    # Add argument parsing
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--game-timeout-seconds', type=int, default=60,
+                       help='Maximum game duration in seconds')
+    parser.add_argument('agent_config_files', nargs='+',
+                       help='One or more agent configuration files')
+    
+    args = parser.parse_args()
+    
     # Start support services
     llm_server, file_monitor = start_services()
 
@@ -112,22 +122,22 @@ def main():
     try:
         print(f"game.py Process ID: {os.getpid()}, User ID: {os.getuid()}", flush=True)
         
-        # Get agent config files from command line arguments
-        agent_config_files = sys.argv[1:]
-        if not agent_config_files:
+        # Use agent config files from parsed arguments instead of sys.argv
+        if not args.agent_config_files:
             print("Please provide at least one agent file path")
             sys.exit(1)
         
         # Start each agent and keep track of processes
         agents = []
-        for idx, agent_config_file in enumerate(agent_config_files):
+        for idx, agent_config_file in enumerate(args.agent_config_files):
             agent = start_agent(idx, agent_config_file)
             agents.append(agent)
 
         for agent in agents:
             print(f"Agent at path {agent.path} given ID: {agent.id} and started with PID: {agent.process.pid}")
 
-        game_loop(agents)
+        # Pass timeout to game_loop
+        game_loop(agents, timeout_seconds=args.game_timeout_seconds)
 
         # Ensure all agents are stopped at the end of the game
         print("Stopping all agents", flush=True)
