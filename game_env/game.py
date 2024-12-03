@@ -9,9 +9,6 @@ from typing import List
 import threading
 import argparse
 
-AGENT_USER = "agent"
-
-
 @dataclass
 class Agent:
     id: int
@@ -37,7 +34,7 @@ def start_agent(agent_id: int, agent_config_file: str) -> Agent:
     stderr_file = open(f'{os.environ["SHARED_LOGS"]}/agent_{name}_{agent_id}_stderr.log', 'w')
     
     process = subprocess.Popen(
-        ["su", "-c", f"python3 -u {agent_path}", AGENT_USER],
+        ["su", "-c", f"python3 -u {agent_path}", os.environ["AGENT_USER"]],
         stdout=stdout_file,
         stderr=stderr_file,
         bufsize=1,

@@ -41,6 +41,7 @@ ENV PYTHONPATH=/root_space
 ENV SHARED_LOGS=/shared_logs
 ENV ROOT_SPACE=/root_space
 ENV AGENT_SPACE=/agent_space
+ENV AGENT_USER=agent
 
 # Run the game
 ENTRYPOINT ["python3", "-u", "game.py"]
