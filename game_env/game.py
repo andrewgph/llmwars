@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import List
 import threading
 import argparse
+import uuid
+import shutil
 
 @dataclass
 class Agent:
@@ -26,7 +28,13 @@ def start_agent(agent_id: int, agent_config_file: str) -> Agent:
     with open(config_path, "r") as f:
         agent_config = json.load(f)
 
-    agent_path = os.path.join(os.environ["AGENT_SPACE"], agent_config["agent_path"])
+    original_agent_path = os.path.join(os.environ["AGENT_SPACE"], agent_config["agent_path"])
+    
+    # Generate random filename and copy the agent file
+    random_filename = f"agent_{uuid.uuid4().hex}.py"
+    agent_path = os.path.join(os.environ["AGENT_SPACE"], random_filename)
+    shutil.copy2(original_agent_path, agent_path)
+    
     name = agent_config["name"]
     
     # Create output files in the mounted directory
@@ -140,7 +148,7 @@ def main():
         print("Stopping all agents", flush=True)
 
         # Kill all processes owned by AGENT_USER (as root)
-        subprocess.run(["pkill", "-9", "-u", AGENT_USER])
+        subprocess.run(["pkill", "-9", "-u", os.environ["AGENT_USER"]])
         
         # Add a small delay to allow processes to be terminated
         time.sleep(1)
