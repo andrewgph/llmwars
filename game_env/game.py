@@ -10,6 +10,7 @@ import threading
 import argparse
 import uuid
 import shutil
+from process_monitor import ProcessMonitor
 
 @dataclass
 class Agent:
@@ -42,7 +43,7 @@ def start_agent(agent_id: int, agent_config_file: str) -> Agent:
     stderr_file = open(f'{os.environ["SHARED_LOGS"]}/agent_{name}_{agent_id}_stderr.log', 'w')
     
     process = subprocess.Popen(
-        ["su", "-c", f"python3 -u {agent_path}", os.environ["AGENT_USER"]],
+        ["su", "-c", f"/usr/bin/python3 -u {agent_path}", os.environ["AGENT_USER"]],
         stdout=stdout_file,
         stderr=stderr_file,
         bufsize=1,
@@ -109,6 +110,10 @@ def start_services():
     return llm_server, file_monitor
 
 def main():
+    # Initialize process monitor
+    process_monitor = ProcessMonitor(os.environ["SHARED_LOGS"])
+    process_monitor.start()
+
     # Add argument parsing
     parser = argparse.ArgumentParser()
     parser.add_argument('--game-timeout-seconds', type=int, default=60,
@@ -175,6 +180,7 @@ def main():
         # Cleanup
         llm_server.terminate()
         file_monitor.terminate()
+        process_monitor.stop()
         
 if __name__ == "__main__":
     main()

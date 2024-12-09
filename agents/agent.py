@@ -170,7 +170,7 @@ class Agent:
             
             # Spawn new process with separate stdout and stderr logs
             process = subprocess.Popen(
-                ["/usr/local/bin/python3", new_process_file],
+                ["/usr/bin/python3", new_process_file],
                 stdout=stdout_file,
                 stderr=stderr_file,
                 universal_newlines=True,

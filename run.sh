@@ -51,10 +51,14 @@ for i in $(seq 1 $NUM_GAMES); do
     
     # Run container in background and redirect stdout/stderr to log files
     docker run --rm \
+        --cap-add SYSLOG \
+        --cap-add SYS_ADMIN \
+        --cap-add LINUX_IMMUTABLE \
+        --cap-add SYS_PACCT \
         -v "$GAME_DIR:/shared_logs" \
         promptwars \
-        --game-timeout-seconds "$TIMEOUT_SECONDS" \
-        "${AGENT_CONFIGS[@]}" > "$GAME_DIR/game.log" 2> "$GAME_DIR/game_err.log" &
+        sh -c "accton on && python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS ${AGENT_CONFIGS[*]}" \
+        > "$GAME_DIR/game.log" 2> "$GAME_DIR/game_err.log" &
 done
 
 # Wait for all background processes to complete

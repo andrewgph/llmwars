@@ -1,17 +1,19 @@
-# Use official Python slim image
-FROM python:3.9-slim
+# Use Ubuntu base image
+FROM ubuntu:22.04
 
-# Install required packages
+# Install required packages including Python and monitoring tools
 RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
     procps \
     inotify-tools \
+    acct \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories
 RUN mkdir -p /root_space /agent_space /shared_logs
 
 # Use 1777 to allow all users to write to the shared logs 
-# Set the sticky bit to prevent agents modifying game logs in shared_logs
 RUN chmod 1777 /shared_logs
 
 # Create a new user called 'agent' and set permissions
@@ -24,7 +26,7 @@ WORKDIR /root_space
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip3 install -r requirements.txt
 
 # Copy root space files
 COPY game_env/* ./
@@ -44,4 +46,4 @@ ENV AGENT_SPACE=/agent_space
 ENV AGENT_USER=agent
 
 # Run the game
-ENTRYPOINT ["python3", "-u", "game.py"]
+# ENTRYPOINT ["python3", "-u", "game.py"]
