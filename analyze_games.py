@@ -32,7 +32,7 @@ def analyze_game_results(base_dir):
     game_dirs = [d for d in Path(base_dir).glob('game_*') if d.is_dir()]
     
     # Store statistics for each agent
-    stats = defaultdict(lambda: {'wins': 0, 'losses': 0, 'total': 0, 'id': None})
+    stats = defaultdict(lambda: {'wins': 0, 'losses': 0, 'total': 0})
     
     for game_dir in game_dirs:
         result_file = game_dir / 'game_result.json'
@@ -48,18 +48,16 @@ def analyze_game_results(base_dir):
             winners = [agent for agent in agents if not agent['was_stopped']]
             losers = [agent for agent in agents if agent['was_stopped']]
             
-            # Update statistics with separate name and ID
+            # Update statistics using composite key
             for agent in winners:
-                agent_key = agent['name']  # Use only name as key
+                agent_key = (agent['name'], agent['id'])  # Tuple of name and ID as key
                 stats[agent_key]['wins'] += 1
                 stats[agent_key]['total'] += 1
-                stats[agent_key]['id'] = agent['id']  # Store ID separately
                 
             for agent in losers:
-                agent_key = agent['name']  # Use only name as key
+                agent_key = (agent['name'], agent['id'])  # Tuple of name and ID as key
                 stats[agent_key]['losses'] += 1
                 stats[agent_key]['total'] += 1
-                stats[agent_key]['id'] = agent['id']  # Store ID separately
                 
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Error reading {result_file}: {e}")
@@ -69,11 +67,11 @@ def analyze_game_results(base_dir):
     headers = ['Agent', 'ID', 'Wins', 'Losses', 'Total Games', 'Win Rate']
     table_data = []
     
-    for agent_name, data in stats.items():
+    for (agent_name, agent_id), data in stats.items():
         win_rate = (data['wins'] / data['total'] * 100) if data['total'] > 0 else 0
         table_data.append([
             agent_name,
-            data['id'],
+            agent_id,
             data['wins'],
             data['losses'],
             data['total'],
