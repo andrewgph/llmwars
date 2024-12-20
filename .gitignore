@@ -4,3 +4,9 @@ game_runs/
 
 # Python
 **/__pycache__/
+
+# Docker image
+promptwars.tar
+
+# QEMU VM
+qemu_vm_files/

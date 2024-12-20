@@ -1,0 +1,73 @@
+#cloud-config
+
+# Add instance ID
+instance-id: ubuntu-vm-001
+
+# Set hostname
+hostname: ubuntu-vm
+
+# Enable package updates and upgrades
+package_update: true
+package_upgrade: true
+
+# Add Docker's official GPG key and repository
+apt:
+  sources:
+    docker.list:
+      source: deb [arch=arm64] https://download.docker.com/linux/ubuntu noble stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+
+# Create user
+users:
+  - name: myuser
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin, docker
+    home: /home/myuser
+    shell: /bin/bash
+    lock_passwd: false
+    # Make sure password authentication is enabled
+    ssh_pwauth: true
+    # password
+    passwd: $6$6k9ZchwyD4NspS/r$EAKeghiam5azGDQeB3xnY4JgBX5ygZNhiVydgwGlUKJ0he8yqBI8yuhnQEN55sOi1E6/ComStA2erOBimaTUf.
+    # Include dynamically generated SSH key
+    ssh_authorized_keys:
+      - ssh-rsa PLACEHOLDER
+
+# Install packages on first boot
+packages:
+  - qemu-guest-agent
+  - vim
+  - ca-certificates
+  - curl
+  - gnupg
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Configure SSH
+ssh_pwauth: true
+
+# Run commands on first boot
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - systemctl start docker
+  - systemctl enable docker
+
+# Set timezone
+timezone: America/Los_Angeles
+
+# Configure networking
+network:
+  version: 2
+  ethernets:
+    enp0s1:  # This is typically the default interface name for QEMU virtio-net
+      dhcp4: true
+      dhcp6: false
+      optional: false  # Make cloud-init wait for network to be up
+      dhcp4-overrides:
+        use-dns: true
+        use-ntp: true
+        route-metric: 100

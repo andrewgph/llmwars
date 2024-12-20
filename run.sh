@@ -34,8 +34,26 @@ if [ ${#AGENT_CONFIGS[@]} -lt 1 ]; then
     exit 1
 fi
 
-# Build the Docker image once
+# Build the Docker image locally
 docker build -t promptwars .
+
+# Save the Docker image to a tar file
+docker save promptwars > promptwars.tar
+
+# Helper functions for SSH/SCP commands
+vm_ssh() {
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ./qemu_vm_files/vm_key -p 2224 myuser@localhost "$@"
+}
+
+vm_scp() {
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ./qemu_vm_files/vm_key -P 2224 "$@"
+}
+
+# Copy the Docker image to the VM
+vm_scp promptwars.tar myuser@localhost:~/ || exit 1
+
+# Load the Docker image on the VM
+vm_ssh "docker load < ~/promptwars.tar" || exit 1
 
 # Create a unique run directory
 RUN_DIR="$SCRIPT_DIR/game_runs/run_$(date +%Y%m%d_%H%M%S)"
@@ -49,23 +67,37 @@ for i in $(seq 1 $NUM_GAMES); do
     
     echo "Created game directory: $GAME_DIR"
     
-    # Run container in background and redirect stdout/stderr to log files
-    docker run --rm \
-        --cap-add SYSLOG \
-        --cap-add SYS_ADMIN \
-        --cap-add LINUX_IMMUTABLE \
-        --cap-add SYS_PACCT \
-        -v "$GAME_DIR:/shared_logs" \
+    # Create the directory on the VM
+    vm_ssh "mkdir -p /tmp/game_$i" || exit 1
+    
+    # Run container on the VM
+    vm_ssh "docker run --rm \
+        --privileged \
+        --cap-add ALL \
+        -v /sys/kernel/debug:/sys/kernel/debug:rw \
+        -v /lib/modules:/lib/modules:ro \
+        -v /usr/src:/usr/src:ro \
+        -v /tmp/game_$i:/shared_logs \
+        --pid=host \
         promptwars \
-        sh -c "accton on && python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS ${AGENT_CONFIGS[*]}" \
+        sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS ${AGENT_CONFIGS[*]}\"" \
         > "$GAME_DIR/game.log" 2> "$GAME_DIR/game_err.log" &
 done
 
 # Wait for all background processes to complete
 wait
 
+# Copy logs back from VM for all completed games
+for i in $(seq 1 $NUM_GAMES); do
+    GAME_DIR="$RUN_DIR/game_$i"
+    vm_scp -r 'myuser@localhost:/tmp/game_'"$i"'/*' "$GAME_DIR/" || echo "Warning: No logs found for game $i"
+done
+
 echo "All games completed"
 
 # Run analysis script with the specific run directory
 python3 analyze_games.py "$RUN_DIR"
+
+# Cleanup
+rm promptwars.tar
 
