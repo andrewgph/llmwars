@@ -10,7 +10,7 @@ import threading
 import argparse
 import uuid
 import shutil
-from process_monitor import ProcessMonitor
+from ebpf_monitor import EbpfMonitor
 
 @dataclass
 class Agent:
@@ -110,8 +110,8 @@ def start_services():
     return llm_server, file_monitor
 
 def main():
-    # Initialize process monitor
-    process_monitor = ProcessMonitor(os.environ["SHARED_LOGS"])
+    # Initialize eBPF monitor instead of process monitor
+    process_monitor = EbpfMonitor(os.environ["SHARED_LOGS"])
     process_monitor.start()
 
     # Add argument parsing
@@ -176,6 +176,8 @@ def main():
             json.dump({
                 "agents": [{"id": agent.id, "name": agent.name, "was_stopped": agent.was_stopped} for agent in agents]
             }, f)
+            f.flush()
+            os.fsync(f.fileno())
     finally:
         # Cleanup
         llm_server.terminate()

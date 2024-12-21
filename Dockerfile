@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     procps \
     inotify-tools \
     acct \
+    bpfcc-tools \
+    python3-bpfcc \
+    linux-headers-6.8.0-49-generic \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories
