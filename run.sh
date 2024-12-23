@@ -3,9 +3,6 @@
 # Get the directory where the script is located
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
-# Generate a unique run ID (8 character random hex)
-RUN_ID=$(openssl rand -hex 4)
-
 # Parse command line arguments
 NUM_GAMES=1  # Default value
 TIMEOUT_SECONDS=60  # Default value
@@ -37,6 +34,13 @@ if [ ${#AGENT_CONFIGS[@]} -lt 1 ]; then
     exit 1
 fi
 
+# Add VM configuration variables
+VM_NAME="promptwars-vm"
+CPUS=4  # Adjust as needed
+RAM="4G"  # Adjust as needed
+DISK_FILE="$SCRIPT_DIR/qemu_vm_files/ubuntu-vm.qcow2"
+ISO_FILE="$SCRIPT_DIR/qemu_vm_files/cloud-init.iso"
+
 # Helper functions for SSH/SCP commands
 vm_ssh() {
     ssh -q \
@@ -52,6 +56,74 @@ vm_scp() {
     scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ./qemu_vm_files/vm_key -P 2224 "$@"
 }
 
+# Check if required VM files exist
+if [ ! -f "$DISK_FILE" ]; then
+    echo "Error: VM disk file not found: $DISK_FILE"
+    exit 1
+fi
+
+if [ ! -f "$ISO_FILE" ]; then
+    echo "Error: Cloud-init ISO file not found: $ISO_FILE"
+    exit 1
+fi
+
+# Create a unique run directory
+RUN_DIR="$SCRIPT_DIR/game_runs/run_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$RUN_DIR"
+
+# Start the VM in the background and save its PID
+qemu-system-aarch64 \
+    -name "$VM_NAME" \
+    -machine virt \
+    -accel hvf \
+    -cpu cortex-a72 \
+    -smp "$CPUS" \
+    -m "$RAM" \
+    -bios /opt/homebrew/share/qemu/edk2-aarch64-code.fd \
+    -drive if=virtio,file="$DISK_FILE" \
+    -cdrom "$ISO_FILE" \
+    -device virtio-net-pci,netdev=net0 \
+    -netdev user,id=net0,hostfwd=tcp::2224-:22 \
+    -device virtio-serial \
+    -chardev socket,path=/tmp/qga.sock,server=on,wait=off,id=qga0 \
+    -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0 \
+    -nographic > "$RUN_DIR/vm.log" 2>&1 &
+VM_PID=$!
+
+# Function to cleanup VM on script exit
+cleanup() {
+    echo "Cleaning up..."
+    if [ -n "$VM_PID" ]; then
+        kill $VM_PID
+        wait $VM_PID 2>/dev/null
+    fi
+}
+
+# Set trap to ensure VM is stopped when script exits
+trap cleanup EXIT
+
+# Wait for VM to boot and SSH to become available
+echo "Waiting for VM to boot..."
+MAX_RETRIES=60  # Maximum number of retries (e.g., 5 minutes with 5-second sleep)
+RETRY_COUNT=0
+while ! vm_ssh "systemctl is-system-running" >/dev/null 2>&1; do
+    sleep 5
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "Error: VM failed to boot within timeout period"
+        exit 1
+    fi
+    
+    echo "Still waiting for VM to boot... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+done
+echo "VM is ready"
+
+# Generate a unique run ID (8 character random hex)
+RUN_ID=$(openssl rand -hex 4)
+
+
+
 # Build the Docker image locally
 docker build -t promptwars .
 
@@ -63,14 +135,10 @@ docker save promptwars > "$TEMP_TAR"
 vm_scp "$TEMP_TAR" myuser@localhost:~/ || exit 1
 
 # Load the Docker image on the VM
-vm_ssh "docker load < ~/promptwars.tar" || exit 1
+vm_ssh "docker load < ~/promptwars_${RUN_ID}.tar" || exit 1
 
 # Cleanup
 rm "$TEMP_TAR"
-
-# Create a unique run directory
-RUN_DIR="$SCRIPT_DIR/game_runs/run_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$RUN_DIR"
 
 # Run multiple games in parallel
 for i in $(seq 1 $NUM_GAMES); do
@@ -100,7 +168,6 @@ for i in $(seq 1 $NUM_GAMES); do
 done
 
 # Wait for all games to complete by checking for running containers
-# TODO: The wait for background processes is not working, so manually checking for running containers
 echo "Waiting for games to complete..."
 while true; do
     sleep 10
@@ -112,9 +179,6 @@ while true; do
         echo "Still running: $RUNNING_CONTAINERS containers..."
     fi
 done
-
-# Wait for all background processes to complete
-wait
 
 # Copy logs back from VM for all completed games
 for i in $(seq 1 $NUM_GAMES); do

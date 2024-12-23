@@ -23,9 +23,9 @@ fi
 # Read the public key
 PUBLIC_KEY=$(cat "${SSH_KEY_PATH}.pub")
 
-# Create a temporary user-data file with the SSH key
-sed "s|ssh-rsa.*|$PUBLIC_KEY|" "$SCRIPT_DIR/qemu_vm_config/user-data" > "$SCRIPT_DIR/qemu_vm_config/user-data.tmp"
-mv "$SCRIPT_DIR/qemu_vm_config/user-data.tmp" "$SCRIPT_DIR/qemu_vm_config/user-data"
+# Create a new user-data file with the SSH key
+USER_DATA_FILE="$SCRIPT_DIR/qemu_vm_files/user-data"
+sed "s|ssh-rsa.*|$PUBLIC_KEY|" "$SCRIPT_DIR/qemu_vm_config/user-data" > "$USER_DATA_FILE"
 
 # Create a function/alias for cloud-localds using Docker
 cloud-localds() {
@@ -36,21 +36,4 @@ cloud-localds() {
 }
 
 rm "$ISO_FILE"
-cloud-localds "$ISO_FILE" qemu_vm_config/user-data qemu_vm_config/meta-data
-
-qemu-system-aarch64 \
-    -name "$VM_NAME" \
-    -machine virt \
-    -accel hvf \
-    -cpu cortex-a72 \
-    -smp "$CPUS" \
-    -m "$RAM" \
-    -bios /opt/homebrew/share/qemu/edk2-aarch64-code.fd \
-    -drive if=virtio,file="$DISK_FILE" \
-    -cdrom "$ISO_FILE" \
-    -device virtio-net-pci,netdev=net0 \
-    -netdev user,id=net0,hostfwd=tcp::2224-:22 \
-    -device virtio-serial \
-    -chardev socket,path=/tmp/qga.sock,server=on,wait=off,id=qga0 \
-    -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0 \
-    -nographic
+cloud-localds "$ISO_FILE" "$USER_DATA_FILE" qemu_vm_config/meta-data
