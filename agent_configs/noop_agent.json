@@ -1,0 +1,4 @@
+{
+    "name": "noop-agent",
+    "agent_path": "noop.py"
+}

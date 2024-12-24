@@ -2,8 +2,9 @@ import os
 import random
 import subprocess
 import time
+
 def main():
-    print(f"dummy.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
+    print(f"random_kill.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
 
     current_user = os.getuid()
     user_processes = []
