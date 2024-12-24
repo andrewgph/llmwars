@@ -4,12 +4,14 @@ import json
 import time
 from datetime import datetime
 import threading
+import sys
 
 # eBPF program
 bpf_text = """
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
 #include <linux/signal.h>
+#include <asm/ptrace.h>
 
 // Data structure to store process events
 struct event_t {
@@ -27,8 +29,10 @@ BPF_PERF_OUTPUT(events);
 int trace_exec(struct pt_regs *ctx) {
     struct event_t event = {};
     
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    event.ppid = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+    event.pid = pid_tgid >> 32;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    event.ppid = task->real_parent->tgid;  // Get actual PPID
     event.uid = bpf_get_current_uid_gid() >> 32;
     event.type = 'E';
     bpf_get_current_comm(&event.comm, sizeof(event.comm));
@@ -41,8 +45,10 @@ int trace_exec(struct pt_regs *ctx) {
 int trace_exit(struct pt_regs *ctx) {
     struct event_t event = {};
     
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    event.ppid = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+    event.pid = pid_tgid >> 32;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    event.ppid = task->real_parent->tgid;  // Get actual PPID
     event.uid = bpf_get_current_uid_gid() >> 32;
     event.type = 'X';
     bpf_get_current_comm(&event.comm, sizeof(event.comm));
@@ -52,11 +58,26 @@ int trace_exit(struct pt_regs *ctx) {
 }
 
 // Track kill signals
-int trace_kill(struct pt_regs *ctx, pid_t pid, int sig) {
+int trace_kill(struct pt_regs *ctx) {
     struct event_t event = {};
     
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    event.kill_pid = pid;
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+    event.pid = pid_tgid >> 32;
+    
+    // On ARM64, use PT_REGS_PARM1 instead of directly accessing regs[0]
+    #ifdef __aarch64__
+        event.kill_pid = (u32)PT_REGS_PARM1(ctx);
+        // Debug print for ARM64
+        bpf_trace_printk("kill: pid=%d target_pid=%d\\n", event.pid, event.kill_pid);
+    #else
+        struct pt_regs *regs = (struct pt_regs *)ctx;
+        event.kill_pid = (u32)regs->regs[0];
+        // Debug print for other architectures
+        bpf_trace_printk("kill: pid=%d target_pid=%d reg0=%lx\\n", event.pid, event.kill_pid, regs->regs[0]);
+    #endif
+    
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    event.ppid = task->real_parent->tgid;
     event.uid = bpf_get_current_uid_gid() >> 32;
     event.type = 'K';
     bpf_get_current_comm(&event.comm, sizeof(event.comm));
@@ -152,12 +173,29 @@ class EbpfMonitor:
             except KeyboardInterrupt:
                 break
     
+    def _print_bpf_output(self):
+        while self.running:
+            try:
+                with open("/sys/kernel/debug/tracing/trace_pipe", "rb") as f:
+                    while self.running:
+                        line = f.readline()
+                        if line:
+                            print("[BPF debug]", line.decode('utf-8', 'replace'), end="", file=sys.stderr)
+            except Exception as e:
+                print(f"Error reading trace pipe: {e}", file=sys.stderr)
+                time.sleep(1)
+    
     def start(self):
         """Start monitoring process events"""
         self.running = True
         self.monitor_thread = threading.Thread(target=self._monitor_events)
         self.monitor_thread.daemon = True
         self.monitor_thread.start()
+        
+        # Start trace pipe reader in a separate thread
+        self.trace_thread = threading.Thread(target=self._print_bpf_output)
+        self.trace_thread.daemon = True
+        self.trace_thread.start()
     
     def stop(self):
         """Stop monitoring process events"""
