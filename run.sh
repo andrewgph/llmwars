@@ -71,6 +71,15 @@ fi
 RUN_DIR="$SCRIPT_DIR/game_runs/run_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$RUN_DIR"
 
+# Function to cleanup VM on script exit
+cleanup() {
+    echo "Cleaning up VM..."
+    if [ -n "$VM_PID" ]; then
+        kill $VM_PID
+        wait $VM_PID 2>/dev/null
+    fi
+}
+
 # Start the VM in the background and save its PID
 qemu-system-aarch64 \
     -name "$VM_NAME" \
@@ -89,15 +98,6 @@ qemu-system-aarch64 \
     -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0 \
     -nographic > "$RUN_DIR/vm.log" 2>&1 &
 VM_PID=$!
-
-# Function to cleanup VM on script exit
-cleanup() {
-    echo "Cleaning up..."
-    if [ -n "$VM_PID" ]; then
-        kill $VM_PID
-        wait $VM_PID 2>/dev/null
-    fi
-}
 
 # Set trap to ensure VM is stopped when script exits
 trap cleanup EXIT
@@ -121,8 +121,6 @@ echo "VM is ready"
 
 # Generate a unique run ID (8 character random hex)
 RUN_ID=$(openssl rand -hex 4)
-
-
 
 # Build the Docker image locally
 docker build -t promptwars .
