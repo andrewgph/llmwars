@@ -57,32 +57,28 @@ int trace_exit(struct pt_regs *ctx) {
     return 0;
 }
 
-// Track kill signals
-int trace_kill(struct pt_regs *ctx) {
+// ------------------------------------------------------------------
+// Switch from a kprobe to a tracepoint for kill syscalls (ARM64).
+//
+// The tracepoint "syscalls:sys_enter_kill" has a well-defined layout
+// for arguments, ensuring we capture the correct PID. We name the
+// function "trace_kill_tp" to differentiate it from the older approach.
+// ------------------------------------------------------------------
+TRACEPOINT_PROBE(syscalls, sys_enter_kill) {
     struct event_t event = {};
-    
     u64 pid_tgid = bpf_get_current_pid_tgid();
-    event.pid = pid_tgid >> 32;
-    
-    // On ARM64, use PT_REGS_PARM1 instead of directly accessing regs[0]
-    #ifdef __aarch64__
-        event.kill_pid = (u32)PT_REGS_PARM1(ctx);
-        // Debug print for ARM64
-        bpf_trace_printk("kill: pid=%d target_pid=%d\\n", event.pid, event.kill_pid);
-    #else
-        struct pt_regs *regs = (struct pt_regs *)ctx;
-        event.kill_pid = (u32)regs->regs[0];
-        // Debug print for other architectures
-        bpf_trace_printk("kill: pid=%d target_pid=%d reg0=%lx\\n", event.pid, event.kill_pid, regs->regs[0]);
-    #endif
-    
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-    event.ppid = task->real_parent->tgid;
+    event.pid = pid_tgid >> 32;  // current PID
     event.uid = bpf_get_current_uid_gid() >> 32;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    event.ppid = task->real_parent->tgid;  // actual PPID
     event.type = 'K';
+
+    // Tracepoint format for sys_enter_kill:
+    // args->pid = the PID argument
+    event.kill_pid = args->pid;
+
     bpf_get_current_comm(&event.comm, sizeof(event.comm));
-    
-    events.perf_submit(ctx, &event, sizeof(event));
+    events.perf_submit(args, &event, sizeof(event));
     return 0;
 }
 """
@@ -120,9 +116,9 @@ class EbpfMonitor:
             'comm': event.comm.decode('utf-8', 'replace'),
         }
         
-        if event_type == ord('K'):  # Compare with ord('K') since we're dealing with bytes
+        if event_type == ord('K'):
             event_data['kill_pid'] = event.kill_pid
-            
+        
         self.events.append(event_data)
         self._save_events()
     
@@ -130,14 +126,12 @@ class EbpfMonitor:
         # Compile and load eBPF program
         self.bpf = BPF(text=bpf_text)
         
-        # List of possible execve probe points for ARM64
+        # Attach kprobes for exec
         execve_probes = [
-            "__arm64_sys_execve",      # ARM64 syscall
-            "do_execveat_common.isra.0",  # Common implementation
-            "bprm_execve",             # Binary program execution
+            "__arm64_sys_execve",
+            "do_execveat_common.isra.0",
+            "bprm_execve"
         ]
-        
-        # Try each probe point until one works
         attached = False
         for probe in execve_probes:
             try:
@@ -147,24 +141,25 @@ class EbpfMonitor:
                 break
             except Exception as e:
                 print(f"Failed to attach to probe {probe}: {str(e)}")
-                continue
-        
         if not attached:
             raise Exception("Could not attach to any execve probe points. Is BPF supported and enabled?")
         
-        # Similarly update the kill probe
-        try:
-            self.bpf.attach_kprobe(event="__arm64_sys_kill", fn_name="trace_kill")
-        except Exception as e:
-            print(f"Failed to attach kill probe: {str(e)}")
-        
-        # do_exit should remain the same as it's architecture-independent
+        # Attach kprobe for do_exit
         try:
             self.bpf.attach_kprobe(event="do_exit", fn_name="trace_exit")
         except Exception as e:
             print(f"Failed to attach exit probe: {str(e)}")
         
-        # Open perf buffer for events
+        # ----------------------------------------------------------------
+        # Instead of attaching a kprobe to __arm64_sys_kill,
+        # attach a tracepoint for kill syscalls:
+        # ----------------------------------------------------------------
+        try:
+            self.bpf.attach_tracepoint(tp="syscalls:sys_enter_kill", fn_name="trace_kill")
+        except Exception as e:
+            print(f"Failed to attach kill tracepoint: {str(e)}")
+        
+        # Open perf buffer
         self.bpf["events"].open_perf_buffer(self._process_event)
         
         while self.running:
@@ -192,7 +187,6 @@ class EbpfMonitor:
         self.monitor_thread.daemon = True
         self.monitor_thread.start()
         
-        # Start trace pipe reader in a separate thread
         self.trace_thread = threading.Thread(target=self._print_bpf_output)
         self.trace_thread.daemon = True
         self.trace_thread.start()
