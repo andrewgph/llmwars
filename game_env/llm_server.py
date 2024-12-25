@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from openai import OpenAI
 import google.generativeai as genai
+import argparse
 
 load_dotenv()
 
@@ -19,19 +20,14 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 # Store agent configurations
 agent_configs = {}
 
-def load_agent_configs():
-    config_dir = os.path.join(os.environ.get('ROOT_SPACE'), 'agent_configs')
-    for filename in os.listdir(config_dir):
-        if filename.endswith('.json'):
-            with open(os.path.join(config_dir, filename)) as f:
-                config = json.load(f)
-                if 'api_key' in config:
-                    agent_configs[config['api_key']] = config
-                else:
-                    print(f"Skipping {filename} because it does not contain 'api_key'")
-
 # Replace @app.before_first_request with a flag and before_request
 _configs_loaded = False
+
+def load_agent_configs(config_path):
+    global agent_configs
+    with open(config_path) as f:
+        agent_configs = json.load(f)
+    print(f"Loaded {len(agent_configs)} agent configurations")
 
 def generate_claude_response(messages, model_name):
     response = claude_client.messages.create(
@@ -65,7 +61,8 @@ def generate_gemini_response(messages, model_name):
 def setup():
     global _configs_loaded
     if not _configs_loaded:
-        load_agent_configs()
+        # Note: We don't need to load configs here anymore since
+        # they're loaded when the server starts
         _configs_loaded = True
 
 @app.route('/generate', methods=['POST'])
@@ -109,4 +106,12 @@ def generate():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--api-key-config', required=True,
+                       help='Path to JSON file containing API key configurations')
+    args = parser.parse_args()
+    
+    # Load API key configs from the provided file
+    load_agent_configs(args.api_key_config)
+    
     app.run(host='0.0.0.0', port=5000)

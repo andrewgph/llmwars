@@ -11,6 +11,7 @@ import argparse
 import uuid
 import shutil
 from ebpf_monitor import EbpfMonitor
+import tempfile
 
 @dataclass
 class Agent:
@@ -22,7 +23,10 @@ class Agent:
     stderr_file: object
     was_stopped: bool = False
 
-def start_agent(agent_id: int, agent_config_file: str) -> Agent:
+def generate_api_key():
+    return f"agent_key_{uuid.uuid4().hex}"
+
+def start_agent(agent_id: int, agent_config_file: str, api_key: str) -> Agent:
     # Load config file from AGENT_SPACE directory
     config_path = os.path.join(os.environ["AGENT_SPACE"], agent_config_file)
     print(f"Loading agent config from {config_path}", flush=True)
@@ -53,7 +57,7 @@ def start_agent(agent_id: int, agent_config_file: str) -> Agent:
             "PYTHONPATH": os.environ["PYTHONPATH"],
             "SHARED_LOGS": os.environ["SHARED_LOGS"],
             "AGENT_SPACE": os.environ["AGENT_SPACE"],
-            "AGENT_API_KEY": agent_config.get("api_key", "")
+            "AGENT_API_KEY": api_key
         }
     )
     return Agent(id=agent_id, name=name, path=agent_path, process=process, 
@@ -80,10 +84,16 @@ def game_loop(agents: List[Agent], timeout_seconds: int):
             print("Game timeout reached. Exiting.", flush=True)
             return
 
-def start_services():
-    # Start LLM server
+def start_services(api_key_configs):
+    # Create temporary config file for LLM server
+    temp_config = tempfile.NamedTemporaryFile(mode='w', delete=False)
+    json.dump(api_key_configs, temp_config)
+    temp_config.close()
+
+    # Start LLM server with path to config
     llm_server = subprocess.Popen(
-        [sys.executable, "-u", os.environ.get('ROOT_SPACE') + "/llm_server.py"],
+        [sys.executable, "-u", os.environ.get('ROOT_SPACE') + "/llm_server.py", 
+         "--api-key-config", temp_config.name],
         stdout=open(os.environ.get('SHARED_LOGS') + "/llm_server.log", 'w', buffering=1),
         stderr=open(os.environ.get('SHARED_LOGS') + "/llm_server_error.log", 'w', buffering=1),
         universal_newlines=True,
@@ -107,7 +117,7 @@ def start_services():
         }
     )
     
-    return llm_server, file_monitor
+    return llm_server, file_monitor, temp_config.name
 
 def main():
     # Initialize eBPF monitor instead of process monitor
@@ -123,24 +133,35 @@ def main():
     
     args = parser.parse_args()
     
-    # Start support services
-    llm_server, file_monitor = start_services()
-
-    # Wait for services to start
-    time.sleep(2)
-    
     try:
         print(f"game.py Process ID: {os.getpid()}, User ID: {os.getuid()}", flush=True)
         
-        # Use agent config files from parsed arguments instead of sys.argv
         if not args.agent_config_files:
             print("Please provide at least one agent file path")
             sys.exit(1)
         
-        # Start each agent and keep track of processes
+        # Generate API keys and configs for each agent
+        api_key_configs = {}
+        agent_configs = []
+        for agent_config_file in args.agent_config_files:
+            with open(os.path.join(os.environ["AGENT_SPACE"], agent_config_file)) as f:
+                config = json.load(f)
+                api_key = generate_api_key()
+                config_copy = config.copy()
+                config_copy['api_key'] = api_key
+                api_key_configs[api_key] = config_copy
+                agent_configs.append((agent_config_file, api_key))
+        
+        # Start services with API key configs
+        llm_server, file_monitor, temp_config_path = start_services(api_key_configs)
+
+        # Wait for services to start
+        time.sleep(2)
+        
+        # Start each agent with its API key
         agents = []
-        for idx, agent_config_file in enumerate(args.agent_config_files):
-            agent = start_agent(idx, agent_config_file)
+        for idx, (agent_config_file, api_key) in enumerate(agent_configs):
+            agent = start_agent(idx, agent_config_file, api_key)
             agents.append(agent)
 
         for agent in agents:
@@ -183,6 +204,8 @@ def main():
         llm_server.terminate()
         file_monitor.terminate()
         process_monitor.stop()
+        # Remove temporary config file
+        os.unlink(temp_config_path)
         
 if __name__ == "__main__":
     main()

@@ -2,6 +2,5 @@
     "name": "claude_sonnet_agent",
     "agent_path": "agent.py",
     "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
-    "api_key": "claude_sonnet_agent_key"
+    "model": "claude-3-5-sonnet-20241022"
 }

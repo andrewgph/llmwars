@@ -2,6 +2,5 @@
     "name": "openai_4o_agent",
     "agent_path": "agent.py",
     "provider": "openai",
-    "model": "gpt-4o",
-    "api_key": "openai_4o_agent_key"
+    "model": "gpt-4o"
 }
