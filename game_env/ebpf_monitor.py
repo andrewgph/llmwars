@@ -155,7 +155,7 @@ class EbpfMonitor:
         # attach a tracepoint for kill syscalls:
         # ----------------------------------------------------------------
         try:
-            self.bpf.attach_tracepoint(tp="syscalls:sys_enter_kill", fn_name="trace_kill")
+            self.bpf.attach_tracepoint(tp="syscalls:sys_enter_kill", fn_name="trace_kill_tp")
         except Exception as e:
             print(f"Failed to attach kill tracepoint: {str(e)}")
         
