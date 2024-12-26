@@ -7,6 +7,10 @@ from datetime import datetime
 from openai import OpenAI
 import google.generativeai as genai
 import argparse
+from collections import defaultdict
+import threading
+import time
+import asyncio
 
 load_dotenv()
 
@@ -22,6 +26,16 @@ agent_configs = {}
 
 # Replace @app.before_first_request with a flag and before_request
 _configs_loaded = False
+
+# Add after existing global variables
+SIMULTANEOUS_TURNS = os.environ.get("LLM_SERVER_SIMULTANEOUS_TURNS", "false").lower() == "true"
+turn_map = defaultdict(int)  # Initialize with 0 for any new key
+turn_count = 0
+turn_lock = threading.Lock()
+
+# Add after other global variables
+RESPONSE_POLL_INTERVAL = 0.1  # seconds
+RESPONSE_TIMEOUT = 30  # seconds
 
 def load_agent_configs(config_path):
     global agent_configs
@@ -57,6 +71,25 @@ def generate_gemini_response(messages, model_name):
     response = model.generate_content(gemini_messages)
     return response.text
 
+def mark_turn_complete(api_key):
+    with turn_lock:
+        turn_map[api_key] += 1
+
+async def wait_for_all_responses(api_key):
+    global turn_count
+    start_time = time.time()
+    while time.time() - start_time < RESPONSE_TIMEOUT:
+        with turn_lock:
+            if min(turn_map.values()) == turn_count + 1:
+                # All agents complete advance the turn
+                turn_count += 1
+                return True
+            if turn_map[api_key] == turn_count:
+                # This agent is now unblocked
+                return True
+        await asyncio.sleep(RESPONSE_POLL_INTERVAL)
+    return False
+
 @app.before_request
 def setup():
     global _configs_loaded
@@ -66,7 +99,7 @@ def setup():
         _configs_loaded = True
 
 @app.route('/generate', methods=['POST'])
-def generate():
+async def generate():
     data = request.json
     messages = data.get('messages', [])
     api_key = request.headers.get('X-Agent-API-Key')
@@ -100,8 +133,23 @@ def generate():
         
         with open(os.path.join(os.environ.get('SHARED_LOGS'), 'llm_interactions.jsonl'), 'a') as f:
             f.write(json.dumps(log_entry) + '\n')
+
+        # Handle simultaneous turns if enabled
+        if SIMULTANEOUS_TURNS:
+            mark_turn_complete(api_key)
+            print(f"Marked turn complete for agent {agent_config['name']}")
             
-        return jsonify({"text": response_text})
+            if await wait_for_all_responses(api_key):
+                print(f"All agents responded for turn, returning response for {agent_config['name']}")
+                return jsonify({"text": response_text})
+            else:
+                print(f"Timeout waiting for other agents' responses")
+                return jsonify({
+                    "error": "Timeout waiting for other agents' responses"
+                }), 408
+        else:
+            # Normal single-response mode
+            return jsonify({"text": response_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

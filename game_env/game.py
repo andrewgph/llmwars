@@ -100,7 +100,8 @@ def start_services(api_key_configs):
         env={
             "PYTHONPATH": os.environ["PYTHONPATH"],
             "SHARED_LOGS": os.environ["SHARED_LOGS"],
-            "ROOT_SPACE": os.environ["ROOT_SPACE"]
+            "ROOT_SPACE": os.environ["ROOT_SPACE"],
+            "LLM_SERVER_SIMULTANEOUS_TURNS": "true"
         }
     )
     
