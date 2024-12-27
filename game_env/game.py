@@ -129,6 +129,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--game-timeout-seconds', type=int, default=60,
                        help='Maximum game duration in seconds')
+    parser.add_argument('--simultaneous-turns', type=bool, default=True,
+                       help='Whether to allow simultaneous turns in LLM server')
     parser.add_argument('agent_config_files', nargs='+',
                        help='One or more agent configuration files')
     
