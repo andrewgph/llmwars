@@ -12,6 +12,7 @@ import uuid
 import shutil
 from ebpf_monitor import EbpfMonitor
 import tempfile
+import logging
 
 @dataclass
 class Agent:
@@ -26,10 +27,19 @@ class Agent:
 def generate_api_key():
     return f"agent_key_{uuid.uuid4().hex}"
 
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
 def start_agent(agent_id: int, agent_config_file: str, api_key: str) -> Agent:
     # Load config file from AGENT_SPACE directory
     config_path = os.path.join(os.environ["AGENT_SPACE"], agent_config_file)
-    print(f"Loading agent config from {config_path}", flush=True)
+    logging.info(f"Loading agent config from {config_path}")
     with open(config_path, "r") as f:
         agent_config = json.load(f)
 
@@ -70,7 +80,7 @@ def game_loop(agents: List[Agent], timeout_seconds: int):
     while True:
         for agent in agents:
             if agent.process.poll() is not None:
-                print(f"Agent {agent.id} terminated with return code: {agent.process.returncode}", flush=True)
+                logging.info(f"Agent {agent.id} terminated with return code: {agent.process.returncode}")
                 agent.was_stopped = True
 
                 # Check if other agents are also stopped
@@ -81,7 +91,7 @@ def game_loop(agents: List[Agent], timeout_seconds: int):
                 return
 
         if time.time() - start_time > timeout_seconds:
-            print("Game timeout reached. Exiting.", flush=True)
+            logging.info("Game timeout reached. Exiting.")
             return
 
 def start_services(api_key_configs):
@@ -121,7 +131,7 @@ def start_services(api_key_configs):
     return llm_server, file_monitor, temp_config.name
 
 def main():
-    # Initialize eBPF monitor instead of process monitor
+    setup_logging()
     process_monitor = EbpfMonitor(os.environ["SHARED_LOGS"])
     process_monitor.start()
 
@@ -137,10 +147,10 @@ def main():
     args = parser.parse_args()
     
     try:
-        print(f"game.py Process ID: {os.getpid()}, User ID: {os.getuid()}", flush=True)
+        logging.info(f"game.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
         
         if not args.agent_config_files:
-            print("Please provide at least one agent file path")
+            logging.error("Please provide at least one agent file path")
             sys.exit(1)
         
         # Generate API keys and configs for each agent
@@ -168,13 +178,13 @@ def main():
             agents.append(agent)
 
         for agent in agents:
-            print(f"Agent at path {agent.path} given ID: {agent.id} and started with PID: {agent.process.pid}")
+            logging.info(f"Agent at path {agent.path} given ID: {agent.id} and started with PID: {agent.process.pid}")
 
         # Pass timeout to game_loop
         game_loop(agents, timeout_seconds=args.game_timeout_seconds)
 
         # Ensure all agents are stopped at the end of the game
-        print("Stopping all agents", flush=True)
+        logging.info("Stopping all agents")
 
         # Kill all processes owned by AGENT_USER (as root)
         subprocess.run(["pkill", "-9", "-u", os.environ["AGENT_USER"]])
@@ -185,12 +195,12 @@ def main():
         # Verify that all agents are stopped
         for agent in agents:
             if agent.process.poll() is not None:
-                print(f"Agent {agent.id} was stopped", flush=True)
+                logging.info(f"Agent {agent.id} was stopped")
             else:
-                print(f"Agent {agent.id} was not stopped", flush=True)
+                logging.warning(f"Agent {agent.id} was not stopped")
         
         for agent in agents:
-            print(f"Agent {agent.id} was stopped: {agent.was_stopped}")
+            logging.info(f"Agent {agent.id} was stopped: {agent.was_stopped}")
             # Close the output files
             agent.stdout_file.close()
             agent.stderr_file.close()
