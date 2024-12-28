@@ -2,11 +2,15 @@
 
 # Get the directory where the script is located
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+QEMU_VM_DIR="$SCRIPT_DIR/qemu_vm_files"
 
 # Parse command line arguments
 NUM_GAMES=1  # Default value
 TIMEOUT_SECONDS=60  # Default value
 SIMULTANEOUS_TURNS=true  # Default value
+# Whether to delete the VM disk file after the run
+# Useful to keep the disk file around when debugging
+DELETE_RUN_VM_DISK=true
 AGENT_CONFIGS=()  # Initialize empty array
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -20,6 +24,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --simultaneous-turns)
             SIMULTANEOUS_TURNS="$2"
+            shift 2
+            ;;
+        --delete-run-vm-disk)
+            DELETE_RUN_VM_DISK="$2"
             shift 2
             ;;
         *)
@@ -42,10 +50,10 @@ fi
 
 # Add VM configuration variables
 VM_NAME="promptwars-vm"
-CPUS=4  # Adjust as needed
-RAM="4G"  # Adjust as needed
-DISK_FILE="$SCRIPT_DIR/qemu_vm_files/ubuntu-vm.qcow2"
-ISO_FILE="$SCRIPT_DIR/qemu_vm_files/cloud-init.iso"
+CPUS="4"
+RAM="4G"
+DISK_FILE="$QEMU_VM_DIR/ubuntu-vm.qcow2"
+ISO_FILE="$QEMU_VM_DIR/cloud-init.iso"
 
 # Helper functions for SSH/SCP commands
 vm_ssh() {
@@ -54,12 +62,12 @@ vm_ssh() {
         -o UserKnownHostsFile=/dev/null \
         -o ServerAliveInterval=60 \
         -o ServerAliveCountMax=10 \
-        -i ./qemu_vm_files/vm_key \
+        -i "$QEMU_VM_DIR/vm_key" \
         -p 2224 myuser@localhost "$@"
 }
 
 vm_scp() {
-    scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ./qemu_vm_files/vm_key -P 2224 "$@"
+    scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$QEMU_VM_DIR/vm_key" -P 2224 "$@"
 }
 
 # Check if required VM files exist
@@ -84,7 +92,15 @@ cleanup() {
         kill $VM_PID
         wait $VM_PID 2>/dev/null
     fi
+    if [ -n "$RUN_DISK_FILE" ] && [ -f "$RUN_DISK_FILE" ] && [ "$DELETE_RUN_VM_DISK" = true ]; then
+        rm "$RUN_DISK_FILE"
+    fi
 }
+
+# Create a temporary copy of VM disk file for this run
+RUN_DISK_FILE="$RUN_DIR/ubuntu-vm.qcow2"
+echo "Creating temporary copy of VM disk file for this run at $RUN_DISK_FILE"
+cp "$DISK_FILE" "$RUN_DISK_FILE"
 
 # Start the VM in the background and save its PID
 qemu-system-aarch64 \
@@ -95,7 +111,7 @@ qemu-system-aarch64 \
     -smp "$CPUS" \
     -m "$RAM" \
     -bios /opt/homebrew/share/qemu/edk2-aarch64-code.fd \
-    -drive if=virtio,file="$DISK_FILE" \
+    -drive if=virtio,file="$RUN_DISK_FILE" \
     -cdrom "$ISO_FILE" \
     -device virtio-net-pci,netdev=net0 \
     -netdev user,id=net0,hostfwd=tcp::2224-:22 \
