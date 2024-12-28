@@ -11,6 +11,8 @@ from collections import defaultdict
 import threading
 import time
 import asyncio
+import logging
+import sys
 
 load_dotenv()
 
@@ -37,11 +39,23 @@ turn_lock = threading.Lock()
 RESPONSE_POLL_INTERVAL = 0.1  # seconds
 RESPONSE_TIMEOUT = 30  # seconds
 
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
+
 def load_agent_configs(config_path):
     global agent_configs
     with open(config_path) as f:
         agent_configs = json.load(f)
-    print(f"Loaded {len(agent_configs)} agent configurations")
+    logger.info(f"Loaded {len(agent_configs)} agent configurations")
 
 def generate_claude_response(messages, model_name):
     response = claude_client.messages.create(
@@ -105,13 +119,15 @@ async def generate():
     api_key = request.headers.get('X-Agent-API-Key')
 
     if not api_key or api_key not in agent_configs:
+        logger.warning(f"Invalid API key attempt: {api_key}")
         return jsonify({"error": "Invalid or missing API key"}), 401
 
     if not messages:
+        logger.warning("Request received with no messages")
         return jsonify({"error": "No messages provided"}), 400
 
     agent_config = agent_configs[api_key]
-    print(f"Generating response for agent: {agent_config['name']}, using model: {agent_config['model']}")
+    logger.info(f"Generating response for agent: {agent_config['name']}, using model: {agent_config['model']}")
     
     try:
         if agent_config['provider'] == 'anthropic':
@@ -121,6 +137,7 @@ async def generate():
         elif agent_config['provider'] == 'gemini':
             response_text = generate_gemini_response(messages, agent_config['model'])
         else:
+            logger.error(f"Invalid provider specified: {agent_config['provider']}")
             return jsonify({"error": "Invalid provider"}), 400
 
         # Log the messages and response
@@ -137,13 +154,13 @@ async def generate():
         # Handle simultaneous turns if enabled
         if SIMULTANEOUS_TURNS:
             mark_turn_complete(api_key)
-            print(f"Marked turn complete for agent {agent_config['name']}")
+            logger.debug(f"Marked turn complete for agent {agent_config['name']}")
             
             if await wait_for_all_responses(api_key):
-                print(f"All agents responded for turn, returning response for {agent_config['name']}")
+                logger.info(f"All agents responded for turn, returning response for {agent_config['name']}")
                 return jsonify({"text": response_text})
             else:
-                print(f"Timeout waiting for other agents' responses")
+                logger.warning(f"Timeout waiting for other agents' responses")
                 return jsonify({
                     "error": "Timeout waiting for other agents' responses"
                 }), 408
@@ -151,6 +168,7 @@ async def generate():
             # Normal single-response mode
             return jsonify({"text": response_text})
     except Exception as e:
+        logger.error(f"Error generating response: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
@@ -162,4 +180,5 @@ if __name__ == '__main__':
     # Load API key configs from the provided file
     load_agent_configs(args.api_key_config)
     
+    logger.info("Starting LLM server on port 5000")
     app.run(host='0.0.0.0', port=5000)

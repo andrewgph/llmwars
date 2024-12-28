@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import threading
 import sys
+import logging
 
 # eBPF program
 bpf_text = """
@@ -92,6 +93,9 @@ class EbpfMonitor:
         self.running = False
         self.monitor_thread = None
         
+        # Setup logging for this module
+        self.logger = logging.getLogger(__name__)
+        
         # Initialize empty events log
         self._save_events()
     
@@ -136,11 +140,11 @@ class EbpfMonitor:
         for probe in execve_probes:
             try:
                 self.bpf.attach_kprobe(event=probe, fn_name="trace_exec")
-                print(f"Successfully attached to probe: {probe}")
+                self.logger.info(f"Successfully attached to probe: {probe}")
                 attached = True
                 break
             except Exception as e:
-                print(f"Failed to attach to probe {probe}: {str(e)}")
+                self.logger.warning(f"Failed to attach to probe {probe}: {str(e)}")
         if not attached:
             raise Exception("Could not attach to any execve probe points. Is BPF supported and enabled?")
         
@@ -148,16 +152,12 @@ class EbpfMonitor:
         try:
             self.bpf.attach_kprobe(event="do_exit", fn_name="trace_exit")
         except Exception as e:
-            print(f"Failed to attach exit probe: {str(e)}")
+            self.logger.error(f"Failed to attach exit probe: {str(e)}")
         
-        # ----------------------------------------------------------------
-        # Instead of attaching a kprobe to __arm64_sys_kill,
-        # attach a tracepoint for kill syscalls:
-        # ----------------------------------------------------------------
         try:
             self.bpf.attach_tracepoint(tp="syscalls:sys_enter_kill", fn_name="trace_kill_tp")
         except Exception as e:
-            print(f"Failed to attach kill tracepoint: {str(e)}")
+            self.logger.error(f"Failed to attach kill tracepoint: {str(e)}")
         
         # Open perf buffer
         self.bpf["events"].open_perf_buffer(self._process_event)
@@ -175,9 +175,9 @@ class EbpfMonitor:
                     while self.running:
                         line = f.readline()
                         if line:
-                            print("[BPF debug]", line.decode('utf-8', 'replace'), end="", file=sys.stderr)
+                            self.logger.debug(f"[BPF debug] {line.decode('utf-8', 'replace').strip()}")
             except Exception as e:
-                print(f"Error reading trace pipe: {e}", file=sys.stderr)
+                self.logger.error(f"Error reading trace pipe: {e}")
                 time.sleep(1)
     
     def start(self):
