@@ -160,7 +160,8 @@ class Agent:
         if "```python" in response:
             code_block = response.split("```python")[1].split("```")[0].strip()
         else:
-            code_block = response.strip()
+            logger.info(f"No code block found in response: {response}")
+            return
         
         logger.info(f"Generated code for new process:\n{code_block}")
         
