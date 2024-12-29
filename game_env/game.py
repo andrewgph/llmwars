@@ -53,8 +53,8 @@ def start_agent(agent_id: int, agent_config_file: str, api_key: str) -> Agent:
     name = agent_config["name"]
     
     # Create output files in the mounted directory
-    stdout_file = open(f'{os.environ["SHARED_LOGS"]}/agent_{name}_{agent_id}_stdout.log', 'w')
-    stderr_file = open(f'{os.environ["SHARED_LOGS"]}/agent_{name}_{agent_id}_stderr.log', 'w')
+    stdout_file = open(f'{os.environ["AGENT_LOGS"]}/agent_{name}_{agent_id}_stdout.log', 'w')
+    stderr_file = open(f'{os.environ["AGENT_LOGS"]}/agent_{name}_{agent_id}_stderr.log', 'w')
     
     process = subprocess.Popen(
         ["su", "-c", f"/usr/bin/python3 -u {agent_path}", os.environ["AGENT_USER"]],
@@ -64,8 +64,7 @@ def start_agent(agent_id: int, agent_config_file: str, api_key: str) -> Agent:
         universal_newlines=True,
         preexec_fn=os.setsid,
         env={
-            "PYTHONPATH": os.environ["PYTHONPATH"],
-            "SHARED_LOGS": os.environ["SHARED_LOGS"],
+            "AGENT_LOGS": os.environ["AGENT_LOGS"],
             "AGENT_SPACE": os.environ["AGENT_SPACE"],
             "AGENT_API_KEY": api_key
         }
@@ -104,12 +103,11 @@ def start_services(api_key_configs):
     llm_server = subprocess.Popen(
         [sys.executable, "-u", os.environ.get('ROOT_SPACE') + "/llm_server.py", 
          "--api-key-config", temp_config.name],
-        stdout=open(os.environ.get('SHARED_LOGS') + "/llm_server.log", 'w', buffering=1),
-        stderr=open(os.environ.get('SHARED_LOGS') + "/llm_server_error.log", 'w', buffering=1),
+        stdout=open(os.environ.get('ROOT_LOGS') + "/llm_server.log", 'w', buffering=1),
+        stderr=open(os.environ.get('ROOT_LOGS') + "/llm_server_error.log", 'w', buffering=1),
         universal_newlines=True,
         env={
-            "PYTHONPATH": os.environ["PYTHONPATH"],
-            "SHARED_LOGS": os.environ["SHARED_LOGS"],
+            "ROOT_LOGS": os.environ["ROOT_LOGS"],
             "ROOT_SPACE": os.environ["ROOT_SPACE"],
             "LLM_SERVER_SIMULTANEOUS_TURNS": "true"
         }
@@ -118,12 +116,11 @@ def start_services(api_key_configs):
     # Start file monitor
     file_monitor = subprocess.Popen(
         [sys.executable, "-u", os.environ.get('ROOT_SPACE') + "/file_monitor.py"],
-        stdout=open(os.environ.get('SHARED_LOGS') + "/file_monitor.log", 'w', buffering=1),
-        stderr=open(os.environ.get('SHARED_LOGS') + "/file_monitor_error.log", 'w', buffering=1),
+        stdout=open(os.environ.get('ROOT_LOGS') + "/file_monitor.log", 'w', buffering=1),
+        stderr=open(os.environ.get('ROOT_LOGS') + "/file_monitor_error.log", 'w', buffering=1),
         universal_newlines=True,
         env={
-            "PYTHONPATH": os.environ["PYTHONPATH"],
-            "SHARED_LOGS": os.environ["SHARED_LOGS"],
+            "ROOT_LOGS": os.environ["ROOT_LOGS"],
             "AGENT_SPACE": os.environ["AGENT_SPACE"]
         }
     )
@@ -132,7 +129,7 @@ def start_services(api_key_configs):
 
 def main():
     setup_logging()
-    process_monitor = EbpfMonitor(os.environ["SHARED_LOGS"])
+    process_monitor = EbpfMonitor(os.environ["ROOT_LOGS"])
     process_monitor.start()
 
     # Add argument parsing
@@ -205,8 +202,8 @@ def main():
             agent.stdout_file.close()
             agent.stderr_file.close()
 
-        # Write the game result to the shared logs
-        with open(os.environ.get('SHARED_LOGS') + "/game_result.json", "w") as f:
+        # Write the game result to the root logs
+        with open(os.environ.get('ROOT_LOGS') + "/game_result.json", "w") as f:
             json.dump({
                 "agents": [{"id": agent.id, "name": agent.name, "was_stopped": agent.was_stopped} for agent in agents]
             }, f)

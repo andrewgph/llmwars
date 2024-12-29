@@ -148,7 +148,7 @@ async def generate():
             "response": response_text
         }
         
-        with open(os.path.join(os.environ.get('SHARED_LOGS'), 'llm_interactions.jsonl'), 'a') as f:
+        with open(os.path.join(os.environ.get('ROOT_LOGS'), 'llm_interactions.jsonl'), 'a') as f:
             f.write(json.dumps(log_entry) + '\n')
 
         # Handle simultaneous turns if enabled

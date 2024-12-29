@@ -159,8 +159,8 @@ class Agent:
         
         timestamp = int(time.time())
         new_process_file = os.path.join(os.environ["AGENT_SPACE"], f"agent_spawn_{timestamp}.py")
-        stdout_file = open(os.path.join(os.environ["SHARED_LOGS"], f"agent_spawn_{timestamp}.log"), 'w', buffering=1)
-        stderr_file = open(os.path.join(os.environ["SHARED_LOGS"], f"agent_spawn_{timestamp}_err.log"), 'w', buffering=1)
+        stdout_file = open(os.path.join(os.environ["AGENT_LOGS"], f"agent_spawn_{timestamp}.log"), 'w', buffering=1)
+        stderr_file = open(os.path.join(os.environ["AGENT_LOGS"], f"agent_spawn_{timestamp}_err.log"), 'w', buffering=1)
         
         try:
             with open(new_process_file, "w") as f:

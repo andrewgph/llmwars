@@ -35,7 +35,7 @@ def analyze_game_results(base_dir):
     stats = defaultdict(lambda: {'wins': 0, 'losses': 0, 'total': 0})
     
     for game_dir in game_dirs:
-        result_file = game_dir / 'game_result.json'
+        result_file = game_dir / 'root_logs/game_result.json'
         if not result_file.exists():
             continue
             

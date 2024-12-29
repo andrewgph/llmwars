@@ -14,10 +14,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories
-RUN mkdir -p /root_space /agent_space /shared_logs
+RUN mkdir -p /root_space /agent_space /agent_logs /root_logs
 
-# Use 1777 to allow all users to write to the shared logs 
-RUN chmod 1777 /shared_logs
+# Use 1777 to allow all users to write to the shared agent logs 
+RUN chmod 1777 /agent_logs
+
+# Set root-only permissions for root_logs
+RUN chmod 700 /root_logs
 
 # Create a new user called 'agent' and set permissions
 RUN useradd -m agent && \
@@ -38,15 +41,14 @@ COPY .env ./
 
 # Copy agent space files
 COPY agents/* /agent_space/
+COPY game_env/llm_client.py /agent_space/
 COPY agent_configs/* /agent_space/
 COPY requirements.txt /agent_space/
 
 # Set environment variables
-ENV PYTHONPATH=/root_space
-ENV SHARED_LOGS=/shared_logs
+# ENV PYTHONPATH=/root_space
+ENV AGENT_LOGS=/agent_logs
+ENV ROOT_LOGS=/root_logs
 ENV ROOT_SPACE=/root_space
 ENV AGENT_SPACE=/agent_space
 ENV AGENT_USER=agent
-
-# Run the game
-# ENTRYPOINT ["python3", "-u", "game.py"]

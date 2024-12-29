@@ -7,7 +7,7 @@ import logging
 class FileChangeHandler(FileSystemEventHandler):
     def __init__(self):
         self.logger = logging.getLogger('file_monitor')
-        handler = logging.FileHandler(os.path.join(os.environ.get('SHARED_LOGS'), 'file_changes.log'))
+        handler = logging.FileHandler(os.path.join(os.environ.get('ROOT_LOGS'), 'file_changes.log'))
         handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
         self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO)

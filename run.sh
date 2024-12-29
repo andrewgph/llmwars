@@ -169,7 +169,7 @@ for i in $(seq 1 $NUM_GAMES); do
     echo "Created game directory: $GAME_DIR"
     
     # Create the directory on the VM using run ID
-    vm_ssh "mkdir -p /tmp/$RUN_ID/game_$i" || exit 1
+    vm_ssh "mkdir -p /tmp/$RUN_ID/game_$i/agent_logs /tmp/$RUN_ID/game_$i/root_logs" || exit 1
     
     # Run container on the VM
     vm_ssh "docker run --rm \
@@ -178,7 +178,8 @@ for i in $(seq 1 $NUM_GAMES); do
         -v /sys/kernel/debug:/sys/kernel/debug:rw \
         -v /lib/modules:/lib/modules:ro \
         -v /usr/src:/usr/src:ro \
-        -v /tmp/$RUN_ID/game_$i:/shared_logs \
+        -v /tmp/$RUN_ID/game_$i/agent_logs:/agent_logs \
+        -v /tmp/$RUN_ID/game_$i/root_logs:/root_logs \
         --pid=host \
         promptwars \
         sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS --simultaneous-turns $SIMULTANEOUS_TURNS ${AGENT_CONFIGS[*]}\" \
