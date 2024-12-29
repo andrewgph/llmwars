@@ -1,8 +1,16 @@
 import os
 import time
+import logging
 
 def main():
-    print(f"noop.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"noop.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
 
     # Wait indefinitely
     while True:

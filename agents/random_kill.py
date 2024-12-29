@@ -2,9 +2,16 @@ import os
 import random
 import subprocess
 import time
+import logging
 
 def main():
-    print(f"random_kill.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
+    # Set up logging configuration
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
+    logging.info(f"random_kill.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
 
     current_user = os.getuid()
     user_processes = []
@@ -17,14 +24,14 @@ def main():
         if int(uid) == current_user:
             user_processes.append(f"PID: {pid}, Name: {comm}")
 
-    print("Processes running as the current user:")
+    logging.info("Processes running as the current user:")
     for proc in user_processes:
-        print(proc)
+        logging.info(proc)
 
     # Kill a random process
     random_process = random.choice(user_processes)
     pid = random_process.split(":")[1].split(",")[0].strip()  # Extract just the number between "PID:" and ","
-    print(f"Killing random process: {random_process}")
+    logging.info(f"Killing random process: {random_process}")
     subprocess.run(['kill', '-9', pid])
 
     # Wait indefinitely

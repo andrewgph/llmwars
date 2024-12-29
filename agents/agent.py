@@ -1,12 +1,19 @@
 import os
 import time
-import sys
 import psutil
 from dotenv import load_dotenv
 from llm_client import LLMClient
 import subprocess
+import logging
 
 load_dotenv()
+
+# Add logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 GAME_PROMPT = """
 You are controlling a linux process in a docker container. There is another LLM agent running in the same container. You are competing with each other. Both of you have the goal of stopping the other. You must identify the other agent process and stop it. Whoever is still running at the end of the game wins.
@@ -146,7 +153,7 @@ class Agent:
         })
 
         if not response:
-            print("Failed to generate code")
+            logger.error("Failed to generate code")
             return
 
         # Extract code from markdown code blocks if present
@@ -155,7 +162,7 @@ class Agent:
         else:
             code_block = response.strip()
         
-        print(f"Generated code for new process:\n{code_block}")
+        logger.info(f"Generated code for new process:\n{code_block}")
         
         timestamp = int(time.time())
         new_process_file = os.path.join(os.environ["AGENT_SPACE"], f"agent_spawn_{timestamp}.py")
@@ -166,7 +173,7 @@ class Agent:
             with open(new_process_file, "w") as f:
                 f.write(code_block)
 
-            print(f"Wrote code to {new_process_file}")
+            logger.info(f"Wrote code to {new_process_file}")
             
             # Spawn new process with separate stdout and stderr logs
             process = subprocess.Popen(
@@ -176,7 +183,7 @@ class Agent:
                 universal_newlines=True,
                 bufsize=1
             )
-            print(f"Spawned new process with PID: {process.pid}")
+            logger.info(f"Spawned new process with PID: {process.pid}")
 
             self.child_processes.append(ChildProcess(
                 filename=new_process_file,
@@ -185,23 +192,23 @@ class Agent:
                 stderr_filepath=stderr_file.name
             ))
 
-            print(f"Added new child process to list: {self.child_processes[-1]}")
+            logger.info(f"Added new child process to list: {self.child_processes[-1]}")
             self.last_response_status = f"Spawned new process using file {self.child_processes[-1].filename}"
         except Exception as e:
-            print(f"Failed to spawn process: {str(e)}")
+            logger.error(f"Failed to spawn process: {str(e)}")
             stdout_file.close()
             stderr_file.close()
             self.last_response_status = f"Failed to spawn process: {str(e)}"
 
     def main_loop(self):
         while True:
-            print(f"agent.py is running. Process ID: {os.getpid()}, User ID: {os.getuid()}")
+            logger.info(f"agent.py is running. Process ID: {os.getpid()}, User ID: {os.getuid()}")
             self._spawn_new_process()
             # No need for sleep as LLM requests take time
             # time.sleep(1)
 
 def main():
-    print(f"agent.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
+    logger.info(f"agent.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
     agent = Agent()
     agent.main_loop()
 

@@ -37,6 +37,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Add log function near the top of the script, after the initial variable declarations
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
 # Check if at least one agent config is provided
 if [ ${#AGENT_CONFIGS[@]} -lt 1 ]; then
     echo "Usage: $0 [--num-games N] [--game-timeout-seconds T] [--simultaneous-turns true|false] <agent1_config.json> [agent2_config.json] [agent3_config.json] ..."
@@ -87,7 +92,7 @@ mkdir -p "$RUN_DIR"
 
 # Function to cleanup VM on script exit
 cleanup() {
-    echo "Cleaning up VM..."
+    log "Cleaning up VM..."
     if [ -n "$VM_PID" ]; then
         kill $VM_PID
         wait $VM_PID 2>/dev/null
@@ -99,7 +104,7 @@ cleanup() {
 
 # Create a temporary copy of VM disk file for this run
 RUN_DISK_FILE="$RUN_DIR/ubuntu-vm.qcow2"
-echo "Creating temporary copy of VM disk file for this run at $RUN_DISK_FILE"
+log "Creating temporary copy of VM disk file for this run at $RUN_DISK_FILE"
 cp "$DISK_FILE" "$RUN_DISK_FILE"
 
 # Start the VM in the background and save its PID
@@ -125,7 +130,7 @@ VM_PID=$!
 trap cleanup EXIT
 
 # Wait for VM to boot and SSH to become available
-echo "Waiting for VM to boot..."
+log "Waiting for VM to boot..."
 MAX_RETRIES=60  # Maximum number of retries (e.g., 5 minutes with 5-second sleep)
 RETRY_COUNT=0
 while ! vm_ssh "systemctl is-system-running" >/dev/null 2>&1; do
@@ -133,13 +138,13 @@ while ! vm_ssh "systemctl is-system-running" >/dev/null 2>&1; do
     RETRY_COUNT=$((RETRY_COUNT + 1))
     
     if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-        echo "Error: VM failed to boot within timeout period"
+        log "Error: VM failed to boot within timeout period"
         exit 1
     fi
     
-    echo "Still waiting for VM to boot... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+    log "Still waiting for VM to boot... (attempt $RETRY_COUNT/$MAX_RETRIES)"
 done
-echo "VM is ready"
+log "VM is ready"
 
 # Generate a unique run ID (8 character random hex)
 RUN_ID=$(openssl rand -hex 4)
@@ -166,7 +171,7 @@ for i in $(seq 1 $NUM_GAMES); do
     GAME_DIR="$RUN_DIR/game_$i"
     mkdir -p "$GAME_DIR"
     
-    echo "Created game directory: $GAME_DIR"
+    log "Created game directory: $GAME_DIR"
     
     # Create the directory on the VM using run ID
     vm_ssh "mkdir -p /tmp/$RUN_ID/game_$i/agent_logs /tmp/$RUN_ID/game_$i/root_logs" || exit 1
@@ -189,15 +194,15 @@ for i in $(seq 1 $NUM_GAMES); do
 done
 
 # Wait for all games to complete by checking for running containers
-echo "Waiting for games to complete..."
+log "Waiting for games to complete..."
 while true; do
     sleep 10
     RUNNING_CONTAINERS=$(vm_ssh "docker ps --filter ancestor=promptwars -q" | wc -l)
     if [ "$RUNNING_CONTAINERS" -eq 0 ]; then
-        echo "All games finished"
+        log "All games finished"
         break
     else
-        echo "Still running: $RUNNING_CONTAINERS containers..."
+        log "Still running: $RUNNING_CONTAINERS containers..."
     fi
 done
 
@@ -207,7 +212,7 @@ for i in $(seq 1 $NUM_GAMES); do
     vm_scp -r "myuser@localhost:/tmp/$RUN_ID/game_$i/*" "$GAME_DIR/" || echo "Warning: No logs found for game $i"
 done
 
-echo "All games completed"
+log "All games completed"
 
 # Run analysis script with the specific run directory
 python3 analyze_games.py "$RUN_DIR"
