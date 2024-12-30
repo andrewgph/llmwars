@@ -37,7 +37,7 @@ turn_lock = threading.Lock()
 
 # Add after other global variables
 RESPONSE_POLL_INTERVAL = 0.1  # seconds
-RESPONSE_TIMEOUT = 30  # seconds
+RESPONSE_TIMEOUT = 60  # seconds
 
 def setup_logging():
     logging.basicConfig(
@@ -88,6 +88,10 @@ def generate_gemini_response(messages, model_name):
 def mark_turn_complete(api_key):
     with turn_lock:
         turn_map[api_key] += 1
+
+def undo_turn(api_key):
+    with turn_lock:
+        turn_map[api_key] -= 1
 
 async def wait_for_all_responses(api_key):
     global turn_count
@@ -161,6 +165,7 @@ async def generate():
                 return jsonify({"text": response_text})
             else:
                 logger.warning(f"Timeout waiting for other agents' responses")
+                undo_turn(api_key)
                 return jsonify({
                     "error": "Timeout waiting for other agents' responses"
                 }), 408
