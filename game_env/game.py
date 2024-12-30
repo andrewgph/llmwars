@@ -93,7 +93,7 @@ def game_loop(agents: List[Agent], timeout_seconds: int):
             logging.info("Game timeout reached. Exiting.")
             return
 
-def start_services(api_key_configs):
+def start_services(api_key_configs, simultaneous_turns):
     # Create temporary config file for LLM server
     temp_config = tempfile.NamedTemporaryFile(mode='w', delete=False)
     json.dump(api_key_configs, temp_config)
@@ -109,7 +109,7 @@ def start_services(api_key_configs):
         env={
             "ROOT_LOGS": os.environ["ROOT_LOGS"],
             "ROOT_SPACE": os.environ["ROOT_SPACE"],
-            "LLM_SERVER_SIMULTANEOUS_TURNS": "true"
+            "LLM_SERVER_SIMULTANEOUS_TURNS": str(simultaneous_turns).lower()
         }
     )
     
@@ -127,21 +127,23 @@ def start_services(api_key_configs):
     
     return llm_server, file_monitor, temp_config.name
 
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--game-timeout-seconds', type=int, default=60,
+                       help='Maximum game duration in seconds')
+    parser.add_argument('--simultaneous-turns', action='store_true', default=False,
+                       help='Allow simultaneous turns in LLM server')
+    parser.add_argument('agent_config_files', nargs='+',
+                       help='One or more agent configuration files')
+    
+    return parser.parse_args()
+
 def main():
     setup_logging()
     process_monitor = EbpfMonitor(os.environ["ROOT_LOGS"])
     process_monitor.start()
 
-    # Add argument parsing
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--game-timeout-seconds', type=int, default=60,
-                       help='Maximum game duration in seconds')
-    parser.add_argument('--simultaneous-turns', type=bool, default=True,
-                       help='Whether to allow simultaneous turns in LLM server')
-    parser.add_argument('agent_config_files', nargs='+',
-                       help='One or more agent configuration files')
-    
-    args = parser.parse_args()
+    args = parse_arguments()
     
     try:
         logging.info(f"game.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
@@ -163,7 +165,7 @@ def main():
                 agent_configs.append((agent_config_file, api_key))
         
         # Start services with API key configs
-        llm_server, file_monitor, temp_config_path = start_services(api_key_configs)
+        llm_server, file_monitor, temp_config_path = start_services(api_key_configs, args.simultaneous_turns)
 
         # Wait for services to start
         time.sleep(2)

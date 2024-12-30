@@ -5,13 +5,13 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 QEMU_VM_DIR="$SCRIPT_DIR/qemu_vm_files"
 
 # Parse command line arguments
-NUM_GAMES=1  # Default value
-TIMEOUT_SECONDS=60  # Default value
-SIMULTANEOUS_TURNS=true  # Default value
+NUM_GAMES=1
+TIMEOUT_SECONDS=60 
+SIMULTANEOUS_TURNS_ARG="--simultaneous-turns" 
 # Whether to delete the VM disk file after the run
 # Useful to keep the disk file around when debugging
 DELETE_RUN_VM_DISK=true
-AGENT_CONFIGS=()  # Initialize empty array
+AGENT_CONFIGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --num-games)
@@ -20,10 +20,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --game-timeout-seconds)
             TIMEOUT_SECONDS="$2"
-            shift 2
-            ;;
-        --simultaneous-turns)
-            SIMULTANEOUS_TURNS="$2"
             shift 2
             ;;
         --delete-run-vm-disk)
@@ -187,7 +183,7 @@ for i in $(seq 1 $NUM_GAMES); do
         -v /tmp/$RUN_ID/game_$i/root_logs:/root_logs \
         --pid=host \
         promptwars \
-        sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS --simultaneous-turns $SIMULTANEOUS_TURNS ${AGENT_CONFIGS[*]}\" \
+        sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS $SIMULTANEOUS_TURNS_ARG ${AGENT_CONFIGS[*]}\" \
         > /tmp/$RUN_ID/game_$i/game.log \
         2> /tmp/$RUN_ID/game_$i/game_err.log" \
         </dev/null > "$GAME_DIR/ssh.log" 2> "$GAME_DIR/ssh_err.log" &
