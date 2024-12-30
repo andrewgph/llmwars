@@ -54,7 +54,15 @@ logger = setup_logging()
 def load_agent_configs(config_path):
     global agent_configs
     with open(config_path) as f:
-        agent_configs = json.load(f)
+        loaded_configs = json.load(f)
+    logger.info(f"Loaded {len(loaded_configs)} agent configurations")
+
+    # Initialize turn map
+    for api_key, config in loaded_configs.items():
+        if not 'provider' in config:
+            logger.info(f"Skipping agent {api_key} because it has no provider")
+            continue
+        agent_configs[api_key] = config
     logger.info(f"Loaded {len(agent_configs)} agent configurations")
 
 def generate_claude_response(messages, model_name):
@@ -93,6 +101,8 @@ def initialize_turn_map():
             turn_map[api_key] = 0
         elif config['provider'] == 'gemini':
             turn_map[api_key] = 0
+        else:
+            logger.error(f"Invalid provider specified: {config['provider']}")
 
 def mark_turn_complete(api_key):
     with turn_lock:
