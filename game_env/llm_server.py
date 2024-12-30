@@ -85,6 +85,15 @@ def generate_gemini_response(messages, model_name):
     response = model.generate_content(gemini_messages)
     return response.text
 
+def initialize_turn_map():
+    for api_key, config in agent_configs.items():
+        if config['provider'] == 'anthropic':
+            turn_map[api_key] = 0
+        elif config['provider'] == 'openai':
+            turn_map[api_key] = 0
+        elif config['provider'] == 'gemini':
+            turn_map[api_key] = 0
+
 def mark_turn_complete(api_key):
     with turn_lock:
         turn_map[api_key] += 1
@@ -184,6 +193,7 @@ if __name__ == '__main__':
     
     # Load API key configs from the provided file
     load_agent_configs(args.api_key_config)
+    initialize_turn_map()
     
     logger.info("Starting LLM server on port 5000")
     app.run(host='0.0.0.0', port=5000)
