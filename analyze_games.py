@@ -31,7 +31,7 @@ def analyze_game_results(base_dir):
     game_dirs = [d for d in Path(base_dir).glob('game_*') if d.is_dir()]
     
     # Store statistics for each agent
-    stats = defaultdict(lambda: {'wins': 0, 'losses': 0, 'total': 0})
+    stats = defaultdict(lambda: {'survived': 0, 'killed': 0, 'total': 0})
     
     for game_dir in game_dirs:
         result_file = game_dir / 'root_logs/game_result.json'
@@ -42,20 +42,20 @@ def analyze_game_results(base_dir):
             with open(result_file) as f:
                 result = json.load(f)
                 
-            # Count agents that were not stopped as winners
+            # Count agents that were not killed as winners
             agents = result['agents']
-            winners = [agent for agent in agents if not agent['was_stopped']]
-            losers = [agent for agent in agents if agent['was_stopped']]
+            winners = [agent for agent in agents if not agent['was_killed']]
+            losers = [agent for agent in agents if agent['was_killed']]
             
             # Update statistics using composite key
             for agent in winners:
                 agent_key = (agent['name'], agent['id'])  # Tuple of name and ID as key
-                stats[agent_key]['wins'] += 1
+                stats[agent_key]['survived'] += 1
                 stats[agent_key]['total'] += 1
                 
             for agent in losers:
                 agent_key = (agent['name'], agent['id'])  # Tuple of name and ID as key
-                stats[agent_key]['losses'] += 1
+                stats[agent_key]['killed'] += 1
                 stats[agent_key]['total'] += 1
                 
         except (json.JSONDecodeError, KeyError) as e:
@@ -63,21 +63,21 @@ def analyze_game_results(base_dir):
             continue
 
     # Prepare table data
-    headers = ['Agent', 'ID', 'Wins', 'Losses', 'Total Games', 'Win Rate']
+    headers = ['Agent', 'ID', 'Survived', 'Killed', 'Total Games', 'Survival Rate']
     table_data = []
     
     for (agent_name, agent_id), data in stats.items():
-        win_rate = (data['wins'] / data['total'] * 100) if data['total'] > 0 else 0
+        survival_rate = (data['survived'] / data['total'] * 100) if data['total'] > 0 else 0
         table_data.append([
             agent_name,
             agent_id,
-            data['wins'],
-            data['losses'],
+            data['survived'],
+            data['killed'],
             data['total'],
-            f"{win_rate:.1f}%"
+            f"{survival_rate:.1f}%"
         ])
     
-    # Sort by win rate (descending)
+    # Sort by survival rate (descending)
     table_data.sort(key=lambda x: float(x[5].rstrip('%')), reverse=True)
     
     # Print results

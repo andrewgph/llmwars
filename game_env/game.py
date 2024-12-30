@@ -23,7 +23,7 @@ class Agent:
     process: subprocess.Popen
     stdout_file: object
     stderr_file: object
-    was_stopped: bool = False
+    was_killed: bool = False
 
 def generate_api_key():
     return f"agent_key_{uuid.uuid4().hex}"
@@ -81,12 +81,15 @@ def game_loop(agents: List[Agent], timeout_seconds: int):
         for agent in agents:
             if agent.process.poll() is not None:
                 logging.info(f"Agent {agent.id} terminated with return code: {agent.process.returncode}")
-                agent.was_stopped = True
+                agent.was_killed = True
 
-                # Check if other agents are also stopped
+                # Small delay in case other agents are also being killed
+                time.sleep(1)
+
+                # Check if other agents are also killed
                 for other_agent in agents:
                     if other_agent.process.poll() is not None:
-                        other_agent.was_stopped = True
+                        other_agent.was_killed = True
 
                 return
 
@@ -183,8 +186,8 @@ def main():
         # Pass timeout to game_loop
         game_loop(agents, timeout_seconds=args.game_timeout_seconds)
 
-        # Ensure all agents are stopped at the end of the game
-        logging.info("Stopping all agents")
+        # Ensure all agents are killed at the end of the game
+        logging.info("Killing all agents")
 
         # Kill all processes owned by AGENT_USER (as root)
         subprocess.run(["pkill", "-9", "-u", os.environ["AGENT_USER"]])
@@ -192,15 +195,15 @@ def main():
         # Add a small delay to allow processes to be terminated
         time.sleep(1)
         
-        # Verify that all agents are stopped
+        # Verify that all agents are killed
         for agent in agents:
             if agent.process.poll() is not None:
-                logging.info(f"Agent {agent.id} was stopped")
+                logging.info(f"Agent {agent.id} was killed")
             else:
-                logging.warning(f"Agent {agent.id} was not stopped")
+                logging.warning(f"Agent {agent.id} was not killed")
         
         for agent in agents:
-            logging.info(f"Agent {agent.id} was stopped: {agent.was_stopped}")
+            logging.info(f"Agent {agent.id} was killed: {agent.was_killed}")
             # Close the output files
             agent.stdout_file.close()
             agent.stderr_file.close()
@@ -208,7 +211,7 @@ def main():
         # Write the game result to the root logs
         with open(os.environ.get('ROOT_LOGS') + "/game_result.json", "w") as f:
             json.dump({
-                "agents": [{"id": agent.id, "name": agent.name, "was_stopped": agent.was_stopped} for agent in agents]
+                "agents": [{"id": agent.id, "name": agent.name, "was_killed": agent.was_killed} for agent in agents]
             }, f)
             f.flush()
             os.fsync(f.fileno())
