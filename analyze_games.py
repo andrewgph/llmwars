@@ -1,8 +1,7 @@
-import json
-import os
+import sys
 from collections import defaultdict
 from pathlib import Path
-import sys
+import json
 
 def create_table(headers, data):
     # Calculate column widths

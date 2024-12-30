@@ -1,8 +1,8 @@
+import logging
 import os
 import time
-from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import logging
+from watchdog.observers import Observer
 
 class FileChangeHandler(FileSystemEventHandler):
     def __init__(self):

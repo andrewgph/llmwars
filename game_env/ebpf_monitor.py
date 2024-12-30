@@ -1,11 +1,12 @@
-from bcc import BPF
-import os
 import json
+import logging
+import os
+import threading
 import time
 from datetime import datetime
-import threading
-import sys
-import logging
+
+# Third party imports
+from bcc import BPF
 
 # eBPF program
 bpf_text = """

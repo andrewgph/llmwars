@@ -1,18 +1,19 @@
+# Standard library imports
+import argparse
+import json
+import logging
 import os
+import shutil
 import subprocess
 import sys
-import json
+import tempfile
 import time
-import signal
+import uuid
 from dataclasses import dataclass
 from typing import List
-import threading
-import argparse
-import uuid
-import shutil
+
+# Third party imports
 from ebpf_monitor import EbpfMonitor
-import tempfile
-import logging
 
 @dataclass
 class Agent:

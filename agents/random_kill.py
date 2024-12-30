@@ -1,8 +1,8 @@
+import logging
 import os
 import random
 import subprocess
 import time
-import logging
 
 def main():
     # Set up logging configuration
