@@ -115,8 +115,7 @@ def analyze_game_results(base_dir):
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('game_analysis.log')
+            logging.StreamHandler()
         ]
     )
 
