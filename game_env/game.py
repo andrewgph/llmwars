@@ -24,6 +24,7 @@ class Agent:
     stdout_file: object
     stderr_file: object
     was_killed: bool = False
+    pid: int = None
 
 def generate_api_key():
     return f"agent_key_{uuid.uuid4().hex}"
@@ -71,7 +72,7 @@ def start_agent(agent_id: int, agent_config_file: str, api_key: str) -> Agent:
         }
     )
     return Agent(id=agent_id, name=name, path=agent_path, process=process, 
-                stdout_file=stdout_file, stderr_file=stderr_file)
+                stdout_file=stdout_file, stderr_file=stderr_file, pid=process.pid)
 
 def game_loop(agents: List[Agent], timeout_seconds: int):
     start_time = time.time()
@@ -144,7 +145,9 @@ def parse_arguments():
 
 def main():
     setup_logging()
-    process_monitor = EbpfMonitor(os.environ["ROOT_LOGS"])
+
+    agent_uid = int(subprocess.check_output(["id", "-u", os.environ["AGENT_USER"]]).decode().strip())
+    process_monitor = EbpfMonitor(os.environ["ROOT_LOGS"], uids={agent_uid})
     process_monitor.start()
 
     args = parse_arguments()
@@ -211,7 +214,14 @@ def main():
         # Write the game result to the root logs
         with open(os.environ.get('ROOT_LOGS') + "/game_result.json", "w") as f:
             json.dump({
-                "agents": [{"id": agent.id, "name": agent.name, "was_killed": agent.was_killed} for agent in agents]
+                "agents": [
+                    {
+                        "id": agent.id,
+                        "name": agent.name,
+                        "was_killed": agent.was_killed,
+                        "pid": agent.pid
+                    } for agent in agents
+                ]
             }, f)
             f.flush()
             os.fsync(f.fileno())

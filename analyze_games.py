@@ -2,6 +2,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 import json
+import logging
 
 def create_table(headers, data):
     # Calculate column widths
@@ -26,44 +27,138 @@ def create_table(headers, data):
     result.append(separator)
     return '\n'.join(result)
 
+def process_game_result(result_file, process_events_file):
+    # Initialize game-specific stats
+    game_stats = defaultdict(lambda: {
+        'survived': 0, 
+        'killed': 0, 
+        'total': 0,
+        'self_killed': 0,
+        'killed_by_other': 0,
+        'kills': 0
+    })
+
+    try:    
+        with open(result_file) as f:
+            result = json.load(f)
+    except Exception as e:
+        logging.error(f"Error reading {result_file}: {e}")
+        return {}  # Return empty stats if there's an error
+    
+    try:
+        with open(process_events_file) as f:
+            process_events = json.load(f)
+    except Exception as e:
+        logging.error(f"Error reading {process_events_file}: {e}")
+        return
+
+    # Build process hierarchy and track agent processes
+    agent_processes = {}  # Map of agent_id -> set of all child PIDs
+    process_parent = {}   # Map of pid -> ppid
+    
+    # Initialize with root agent processes from game results
+    for agent in result['agents']:
+        agent_processes[agent['id']] = [agent['pid']]
+        
+    # Process exec events to build process hierarchy
+    for event in process_events:
+        if event['type'] == 'E':
+            process_parent[event['pid']] = event['ppid']
+            # Check if this is a child of any agent process
+            for agent_id, pids in agent_processes.items():
+                if event['ppid'] in pids:
+                    pids.append(event['pid'])
+    
+    # Remove the top level su process from the hierarchy
+    for agent_id, pids in agent_processes.items():
+        pids.pop(0)
+
+    logging.info(f"Agent processes: {agent_processes}")
+
+    # Analyze kill events
+    for agent in result['agents']:
+        agent_key = (agent['name'], agent['id'])
+        # The first two pids are a su and sh / python3 process, either being killed is fatal for the agent
+        agent_root_pids = agent_processes[agent['id']][:2]
+        
+        # Find the kill event for this agent
+        kill_events = [e for e in process_events if e['type'] == 'K' and e['kill_pid'] in agent_root_pids]
+        
+        if kill_events:
+            killer_event = kill_events[0]
+            killer_pid = killer_event['pid']
+            
+            for other_id, other_pids in agent_processes.items():
+                if other_id != agent['id'] and killer_pid in other_pids:
+                    game_stats[agent_key]['killed_by_other'] += 1
+                    killer_agent_id = next((agent_id for agent_id, pids in agent_processes.items() 
+                                          if killer_pid in pids), None)
+                    if killer_agent_id:
+                        killer_name = next(agent['name'] for agent in result['agents'] if agent['id'] == killer_agent_id)
+                        game_stats[(killer_name, killer_agent_id)]['kills'] += 1
+                    break
+                elif other_id == agent['id'] and killer_pid in other_pids:
+                    game_stats[agent_key]['self_killed'] += 1
+                    break
+            
+            game_stats[agent_key]['killed'] += 1
+        else:
+            game_stats[agent_key]['survived'] += 1
+        
+        game_stats[agent_key]['total'] += 1
+
+    return game_stats
+
 def analyze_game_results(base_dir):
-    # Find all game directories in the specific run directory
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('game_analysis.log')
+        ]
+    )
+
+    # Find all game directories
     game_dirs = [d for d in Path(base_dir).glob('game_*') if d.is_dir()]
+    logging.info(f"Found {len(game_dirs)} game directories to analyze")
     
     # Store statistics for each agent
-    stats = defaultdict(lambda: {'survived': 0, 'killed': 0, 'total': 0})
+    stats = defaultdict(lambda: {
+        'survived': 0, 
+        'killed': 0, 
+        'total': 0,
+        'self_killed': 0,
+        'killed_by_other': 0,
+        'kills': 0
+    })
     
     for game_dir in game_dirs:
+        logging.info(f"Processing game directory: {game_dir}")
         result_file = game_dir / 'root_logs/game_result.json'
         if not result_file.exists():
+            logging.warning(f"Missing game result file in {game_dir}")
+            continue
+        process_events_file = game_dir / 'root_logs/process_events.json'
+        if not process_events_file.exists():
+            logging.warning(f"Missing process events file in {game_dir}")
             continue
             
-        try:
-            with open(result_file) as f:
-                result = json.load(f)
-                
-            # Count agents that were not killed as winners
-            agents = result['agents']
-            winners = [agent for agent in agents if not agent['was_killed']]
-            losers = [agent for agent in agents if agent['was_killed']]
-            
-            # Update statistics using composite key
-            for agent in winners:
-                agent_key = (agent['name'], agent['id'])  # Tuple of name and ID as key
-                stats[agent_key]['survived'] += 1
-                stats[agent_key]['total'] += 1
-                
-            for agent in losers:
-                agent_key = (agent['name'], agent['id'])  # Tuple of name and ID as key
-                stats[agent_key]['killed'] += 1
-                stats[agent_key]['total'] += 1
-                
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"Error reading {result_file}: {e}")
-            continue
+        # Get stats for this game and merge them
+        game_stats = process_game_result(result_file, process_events_file)
+        
+        # Convert tuple keys to strings for JSON serialization
+        serializable_stats = {f"{name}_{id}": stats for (name, id), stats in game_stats.items()}
+        logging.info(f"Game results for {game_dir}: {json.dumps(serializable_stats, indent=2)}")
+        
+        # Merge game stats into overall stats
+        for agent_key, agent_stats in game_stats.items():
+            for stat_name, stat_value in agent_stats.items():
+                stats[agent_key][stat_name] += stat_value
 
     # Prepare table data
-    headers = ['Agent', 'ID', 'Survived', 'Killed', 'Total Games', 'Survival Rate']
+    headers = ['Agent', 'ID', 'Survived', 'Killed', 'Self Kills', 'Opponent Kills', 'Kills', 'Total Games', 'Survival Rate']
     table_data = []
     
     for (agent_name, agent_id), data in stats.items():
@@ -73,12 +168,15 @@ def analyze_game_results(base_dir):
             agent_id,
             data['survived'],
             data['killed'],
+            data['self_killed'],
+            data['killed_by_other'],
+            data['kills'],
             data['total'],
             f"{survival_rate:.1f}%"
         ])
     
     # Sort by survival rate (descending)
-    table_data.sort(key=lambda x: float(x[5].rstrip('%')), reverse=True)
+    table_data.sort(key=lambda x: float(x[8].rstrip('%')), reverse=True)
     
     # Print results
     print("\nGame Results Summary")

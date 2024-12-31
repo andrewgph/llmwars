@@ -86,13 +86,14 @@ TRACEPOINT_PROBE(syscalls, sys_enter_kill) {
 """
 
 class EbpfMonitor:
-    def __init__(self, log_dir):
+    def __init__(self, log_dir, uids=None):
         self.log_dir = log_dir
         self.events_log_path = os.path.join(log_dir, 'process_events.json')
         self.events = []
         self.bpf = None
         self.running = False
         self.monitor_thread = None
+        self.uids = uids
         
         # Setup logging for this module
         self.logger = logging.getLogger(__name__)
@@ -112,6 +113,10 @@ class EbpfMonitor:
         if isinstance(event_type, bytes):
             event_type = int.from_bytes(event_type, byteorder='little')
         
+        # Skip events if uid filtering is enabled and uid doesn't match
+        if self.uids is not None and event.uid not in self.uids:
+            return
+            
         event_data = {
             'timestamp': datetime.now().isoformat(),
             'type': chr(event_type),
