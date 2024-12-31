@@ -164,6 +164,11 @@ class Agent:
         else:
             logger.info(f"No code block found in response: {response}")
             return
+    
+        # Check if code block is empty after stripping
+        if not code_block.strip():
+            logger.info("Empty code block found in response")
+            return
         
         logger.info(f"Generated code for new process:\n{code_block}")
         
