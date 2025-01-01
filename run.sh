@@ -183,7 +183,7 @@ for i in $(seq 1 $NUM_GAMES); do
         -v /tmp/$RUN_ID/game_$i/root_logs:/root_logs \
         --pid=host \
         promptwars \
-        sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS $SIMULTANEOUS_TURNS_ARG ${AGENT_CONFIGS[*]}\" \
+        sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS $SIMULTANEOUS_TURNS_ARG --game-type ONE_VS_ONE_WITH_TRIPWIRE ${AGENT_CONFIGS[*]}\" \
         > /tmp/$RUN_ID/game_$i/game.log \
         2> /tmp/$RUN_ID/game_$i/game_err.log" \
         </dev/null > "$GAME_DIR/ssh.log" 2> "$GAME_DIR/ssh_err.log" &

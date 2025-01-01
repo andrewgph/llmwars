@@ -28,14 +28,15 @@ def create_table(headers, data):
     return '\n'.join(result)
 
 def process_game_result(result_file, process_events_file):
-    # Initialize game-specific stats
+    # Initialize game-specific stats with new tripwire_kills field
     game_stats = defaultdict(lambda: {
         'survived': 0, 
         'killed': 0, 
         'total': 0,
         'self_killed': 0,
         'killed_by_other': 0,
-        'kills': 0
+        'kills': 0,
+        'tripwire_kills': 0  # New field
     })
 
     try:    
@@ -95,7 +96,11 @@ def process_game_result(result_file, process_events_file):
                                           if killer_pid in pids), None)
                     if killer_agent_id:
                         killer_name = next(agent['name'] for agent in result['agents'] if agent['id'] == killer_agent_id)
-                        game_stats[(killer_name, killer_agent_id)]['kills'] += 1
+                        # Check if the killed agent was a tripwire
+                        if agent.get('is_tripwire', False):
+                            game_stats[(killer_name, killer_agent_id)]['tripwire_kills'] += 1
+                        else:
+                            game_stats[(killer_name, killer_agent_id)]['kills'] += 1
                     break
                 elif other_id == agent['id'] and killer_pid in other_pids:
                     game_stats[agent_key]['self_killed'] += 1
@@ -130,7 +135,8 @@ def analyze_game_results(base_dir):
         'total': 0,
         'self_killed': 0,
         'killed_by_other': 0,
-        'kills': 0
+        'kills': 0,
+        'tripwire_kills': 0
     })
     
     for game_dir in game_dirs:
@@ -157,10 +163,25 @@ def analyze_game_results(base_dir):
                 stats[agent_key][stat_name] += stat_value
 
     # Prepare table data
-    headers = ['Agent', 'ID', 'Survived', 'Killed', 'Self Kills', 'Opponent Kills', 'Kills', 'Total Games', 'Survival Rate']
+    headers = ['Agent', 'ID', 'Survived', 'Killed', 'Self Kills', 'Opponent Kills', 'Kills', 'Tripwire Kills', 'Total Games', 'Survival Rate']
     table_data = []
     
     for (agent_name, agent_id), data in stats.items():
+        # Skip tripwire agents when creating the table
+        is_tripwire = False
+        for game_dir in game_dirs:
+            result_file = game_dir / 'root_logs/game_result.json'
+            if result_file.exists():
+                game_result = json.loads(result_file.read_text())
+                if any(agent.get('is_tripwire', False) 
+                      for agent in game_result['agents'] 
+                      if agent['id'] == agent_id):
+                    is_tripwire = True
+                    break
+        
+        if is_tripwire:
+            continue
+            
         survival_rate = (data['survived'] / data['total'] * 100) if data['total'] > 0 else 0
         table_data.append([
             agent_name,
@@ -170,12 +191,14 @@ def analyze_game_results(base_dir):
             data['self_killed'],
             data['killed_by_other'],
             data['kills'],
+            data['tripwire_kills'],
             data['total'],
             f"{survival_rate:.1f}%"
         ])
     
-    # Sort by survival rate (descending)
-    table_data.sort(key=lambda x: float(x[8].rstrip('%')), reverse=True)
+    # Sort by survival rate using header index
+    survival_rate_idx = headers.index('Survival Rate')
+    table_data.sort(key=lambda x: float(x[survival_rate_idx].rstrip('%')), reverse=True)
     
     # Print results
     print("\nGame Results Summary")
