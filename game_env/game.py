@@ -82,7 +82,7 @@ def start_agent(agent_id: int, agent_config_file: str, api_key: str, game_type: 
         raise ValueError(f"Invalid game type: {game_type}")
 
     process = subprocess.Popen(
-        ["su", "-c", f"/usr/bin/python3 -u {agent_path} '{game_description}'", os.environ["AGENT_USER"]],
+        ["su", "-c", f"/usr/bin/python3 -u {agent_path}", os.environ["AGENT_USER"]],
         stdout=stdout_file,
         stderr=stderr_file,
         bufsize=1,
@@ -91,7 +91,8 @@ def start_agent(agent_id: int, agent_config_file: str, api_key: str, game_type: 
         env={
             "AGENT_LOGS": os.environ["AGENT_LOGS"],
             "AGENT_SPACE": os.environ["AGENT_SPACE"],
-            "AGENT_API_KEY": api_key
+            "AGENT_API_KEY": api_key,
+            "GAME_DESCRIPTION": game_description
         }
     )
     return Agent(id=agent_id, name=name, path=agent_path, process=process, 

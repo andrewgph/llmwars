@@ -219,9 +219,9 @@ class Agent:
 
 def main():
     logger.info(f"agent.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
-    if len(sys.argv) <= 1:
-        raise ValueError("Game description must be provided as command line argument")
-    game_description = sys.argv[1]
+    game_description = os.environ.get("GAME_DESCRIPTION")
+    if not game_description:
+        raise ValueError("GAME_DESCRIPTION environment variable must be set")
     agent = Agent(game_description)
     agent.main_loop()
 
