@@ -168,6 +168,7 @@ async def generate():
         log_entry = {
             "timestamp": datetime.now().isoformat(),
             "agent_name": agent_config['name'],
+            "api_key": api_key,
             "messages": messages,
             "response": response_text
         }

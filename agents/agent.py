@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 
 from dotenv import load_dotenv
 import psutil
@@ -174,10 +175,10 @@ class Agent:
         
         logger.info(f"Generated code for new process:\n{code_block}")
         
-        timestamp = int(time.time())
-        new_process_file = os.path.join(os.environ["AGENT_SPACE"], f"agent_spawn_{timestamp}.py")
-        stdout_file = open(os.path.join(os.environ["AGENT_LOGS"], f"agent_spawn_{timestamp}.log"), 'w', buffering=1)
-        stderr_file = open(os.path.join(os.environ["AGENT_LOGS"], f"agent_spawn_{timestamp}_err.log"), 'w', buffering=1)
+        spawn_id = str(uuid.uuid4())[:8]
+        new_process_file = os.path.join(os.environ["AGENT_SPACE"], f"agent_spawn_{spawn_id}.py")
+        stdout_file = open(os.path.join(os.environ["AGENT_LOGS"], f"agent_spawn_{spawn_id}.log"), 'w', buffering=1)
+        stderr_file = open(os.path.join(os.environ["AGENT_LOGS"], f"agent_spawn_{spawn_id}_err.log"), 'w', buffering=1)
         
         try:
             with open(new_process_file, "w") as f:
