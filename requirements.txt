@@ -5,4 +5,4 @@ flask[async]
 requests
 watchdog
 openai
-google-generativeai
+google-genai

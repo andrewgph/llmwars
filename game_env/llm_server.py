@@ -13,7 +13,8 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from openai import OpenAI
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
@@ -22,7 +23,7 @@ app = Flask(__name__)
 # Setup LLM clients
 claude_client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Store agent configurations
 agent_configs = {}
@@ -75,23 +76,38 @@ def generate_claude_response(messages, model_name):
     return response.content[0].text
 
 def generate_openai_response(messages, model_name):
+    # Assumes using a reasoning model
     response = openai_client.chat.completions.create(
         model=model_name,
+        reasoning_effort="high",
         messages=messages,
     )
     return response.choices[0].message.content
 
-def generate_gemini_response(messages, model_name):
-    model = genai.GenerativeModel(model_name=model_name)
+def generate_gemini_response(messages, model_name):    
     # Convert OpenAI-style messages to Gemini format
     gemini_messages = [
         {
-            "role": msg["role"],
-            "parts": [msg["content"]]
+            "role": "model" if msg["role"] == "assistant" else "user",
+            "parts": [{
+                "text": msg["content"]
+            }]
         }
         for msg in messages
     ]
-    response = model.generate_content(gemini_messages)
+
+    # Assumes using a thinking model
+    chat = gemini_client.chats.create(
+        model=model_name,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(include_thoughts=True),
+            http_options=types.HttpOptions(api_version='v1alpha'),
+        ),
+        history=gemini_messages[:-1]
+    )
+
+    response = chat.send_message(gemini_messages[-1]["parts"][0]["text"])
+
     return response.text
 
 def initialize_turn_map():

@@ -1,0 +1,6 @@
+{
+    "name": "openai_o3_mini_agent",
+    "agent_path": "agent.py",
+    "provider": "openai",
+    "model": "o3-mini"
+}
