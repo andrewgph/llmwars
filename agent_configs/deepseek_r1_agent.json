@@ -1,0 +1,6 @@
+{
+    "name": "deepseek_r1_agent",
+    "agent_path": "agent.py",
+    "provider": "fireworks",
+    "model": "accounts/fireworks/models/deepseek-r1"
+}

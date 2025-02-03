@@ -23,6 +23,18 @@ app = Flask(__name__)
 # Setup LLM clients
 claude_client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+openrouter_client = OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=os.environ.get("OPENROUTER_API_KEY"),
+)
+hyperbolic_client = OpenAI(
+  base_url="https://api.hyperbolic.xyz/v1",
+  api_key=os.environ.get("HYPERBOLIC_API_KEY"),
+)
+fireworks_client = OpenAI(
+  base_url="https://api.fireworks.ai/inference/v1",
+  api_key=os.environ.get("FIREWORKS_API_KEY"),
+)
 gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Store agent configurations
@@ -84,6 +96,27 @@ def generate_openai_response(messages, model_name):
     )
     return response.choices[0].message.content
 
+def generate_openrouter_response(messages, model_name):
+    response = openrouter_client.chat.completions.create(
+        model=model_name,
+        messages=messages,
+    )
+    return response.choices[0].message.content
+
+def generate_hyperbolic_response(messages, model_name):
+    response = hyperbolic_client.chat.completions.create(
+        model=model_name,
+        messages=messages,
+    )
+    return response.choices[0].message.content
+
+def generate_fireworks_response(messages, model_name):
+    response = fireworks_client.chat.completions.create(
+        model=model_name,
+        messages=messages,
+    )
+    return response.choices[0].message.content
+
 def generate_gemini_response(messages, model_name):    
     # Convert OpenAI-style messages to Gemini format
     gemini_messages = [
@@ -117,6 +150,12 @@ def initialize_turn_map():
         elif config['provider'] == 'openai':
             turn_map[api_key] = 0
         elif config['provider'] == 'gemini':
+            turn_map[api_key] = 0
+        elif config['provider'] == 'openrouter':
+            turn_map[api_key] = 0
+        elif config['provider'] == 'hyperbolic':
+            turn_map[api_key] = 0
+        elif config['provider'] == 'fireworks':
             turn_map[api_key] = 0
         else:
             logger.error(f"Invalid provider specified: {config['provider']}")
@@ -176,6 +215,12 @@ async def generate():
             response_text = generate_openai_response(messages, agent_config['model'])
         elif agent_config['provider'] == 'gemini':
             response_text = generate_gemini_response(messages, agent_config['model'])
+        elif agent_config['provider'] == 'openrouter':
+            response_text = generate_openrouter_response(messages, agent_config['model'])
+        elif agent_config['provider'] == 'hyperbolic':
+            response_text = generate_hyperbolic_response(messages, agent_config['model'])
+        elif agent_config['provider'] == 'fireworks':
+            response_text = generate_fireworks_response(messages, agent_config['model'])
         else:
             logger.error(f"Invalid provider specified: {agent_config['provider']}")
             return jsonify({"error": "Invalid provider"}), 400
