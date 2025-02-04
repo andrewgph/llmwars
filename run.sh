@@ -6,12 +6,13 @@ QEMU_VM_DIR="$SCRIPT_DIR/qemu_vm_files"
 
 # Parse command line arguments
 NUM_GAMES=1
-TIMEOUT_SECONDS=60 
+TIMEOUT_SECONDS=300
 SIMULTANEOUS_TURNS_ARG="--simultaneous-turns" 
 # Whether to delete the VM disk file after the run
 # Useful to keep the disk file around when debugging
 DELETE_RUN_VM_DISK=true
 GAME_TYPE="ONE_VS_ONE"  # Add default game type
+MAX_TURNS=10  # Add default max turns
 AGENT_CONFIGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -31,6 +32,10 @@ while [[ $# -gt 0 ]]; do
             GAME_TYPE="$2"
             shift 2
             ;;
+        --max-turns)
+            MAX_TURNS="$2"
+            shift 2
+            ;;
         *)
             AGENT_CONFIGS+=("$1")
             shift
@@ -45,12 +50,13 @@ log() {
 
 # Check if at least one agent config is provided
 if [ ${#AGENT_CONFIGS[@]} -lt 1 ]; then
-    echo "Usage: $0 [--num-games N] [--game-timeout-seconds T] [--simultaneous-turns true|false] [--game-type TYPE] <agent1_config.json> [agent2_config.json] [agent3_config.json] ..."
+    echo "Usage: $0 [--num-games N] [--game-timeout-seconds T] [--simultaneous-turns true|false] [--game-type TYPE] [--max-turns M] <agent1_config.json> [agent2_config.json] [agent3_config.json] ..."
     echo "Options:"
     echo "  --num-games N              Number of parallel games to run (default: 1)"
     echo "  --game-timeout-seconds T   Maximum duration for each game in seconds (default: 60)"
     echo "  --simultaneous-turns       Whether to allow simultaneous turns (default: true)"
     echo "  --game-type TYPE          Game type to run (default: ONE_VS_ONE_WITH_TRIPWIRE)"
+    echo "  --max-turns M             Maximum turns for each game (default: 10)"
     echo "Provide at least one agent configuration file"
     exit 1
 fi
@@ -189,7 +195,7 @@ for i in $(seq 1 $NUM_GAMES); do
         -v /tmp/$RUN_ID/game_$i/root_logs:/root_logs \
         --pid=host \
         promptwars \
-        sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS $SIMULTANEOUS_TURNS_ARG --game-type $GAME_TYPE ${AGENT_CONFIGS[*]}\" \
+        sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS $SIMULTANEOUS_TURNS_ARG --game-type $GAME_TYPE --max-turns $MAX_TURNS ${AGENT_CONFIGS[*]}\" \
         > /tmp/$RUN_ID/game_$i/game.log \
         2> /tmp/$RUN_ID/game_$i/game_err.log" \
         </dev/null > "$GAME_DIR/ssh.log" 2> "$GAME_DIR/ssh_err.log" &

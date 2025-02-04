@@ -258,6 +258,10 @@ async def generate():
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
+@app.route('/turn_count', methods=['GET'])
+def get_turn_count():
+    return jsonify({"turn_count": turn_count})
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--api-key-config', required=True,

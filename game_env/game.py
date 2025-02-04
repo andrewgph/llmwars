@@ -12,6 +12,7 @@ import uuid
 from dataclasses import dataclass
 from typing import List
 from enum import Enum
+import requests
 
 # Third party imports
 from ebpf_monitor import EbpfMonitor
@@ -98,11 +99,15 @@ def start_agent(agent_id: int, agent_config_file: str, api_key: str, game_type: 
     return Agent(id=agent_id, name=name, path=agent_path, process=process, 
                 stdout_file=stdout_file, stderr_file=stderr_file, pid=process.pid, is_tripwire=is_tripwire)
 
-def game_loop(agents: List[Agent], timeout_seconds: int):
+def game_loop(agents: List[Agent], max_turns: int, timeout_seconds: int):
     start_time = time.time()
 
-    # Monitor processes until any one terminates
+    # Get the current turn count from LLM server
     while True:
+        # Make request to new LLM server endpoint to get current turn
+        response = requests.get("http://127.0.0.1:5000/turn_count")
+        current_turn = response.json()["turn_count"]
+        
         for agent in agents:
             if agent.process.poll() is not None:
                 logging.info(f"Agent {agent.id} terminated with return code: {agent.process.returncode}")
@@ -118,6 +123,9 @@ def game_loop(agents: List[Agent], timeout_seconds: int):
 
                 return
 
+        if current_turn >= max_turns:
+            logging.info("Maximum turns reached. Exiting.")
+            return
         if time.time() - start_time > timeout_seconds:
             logging.info("Game timeout reached. Exiting.")
             return
@@ -158,7 +166,7 @@ def start_services(api_key_configs, simultaneous_turns):
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--game-timeout-seconds', type=int, default=60,
+    parser.add_argument('--game-timeout-seconds', type=int, default=300,
                        help='Maximum game duration in seconds')
     parser.add_argument('--simultaneous-turns', action='store_true', default=False,
                        help='Allow simultaneous turns in LLM server')
@@ -167,6 +175,8 @@ def parse_arguments():
     parser.add_argument('--game-type', type=str, default=GameType.ONE_VS_ONE.name,
                        choices=[gt.name for gt in GameType],
                        help='Type of game to run')
+    parser.add_argument('--max-turns', type=int, default=30,
+                       help='Maximum number of turns before game ends')
     args = parser.parse_args()
     # Convert the string to enum after validation
     args.game_type = GameType[args.game_type]
@@ -225,7 +235,7 @@ def main():
             logging.info(f"Agent at path {agent.path} given ID: {agent.id} and started with PID: {agent.process.pid}")
 
         # Pass timeout to game_loop
-        game_loop(agents, timeout_seconds=args.game_timeout_seconds)
+        game_loop(agents, max_turns=args.max_turns, timeout_seconds=args.game_timeout_seconds)
 
         # Ensure all agents are killed at the end of the game
         logging.info("Killing all agents")
