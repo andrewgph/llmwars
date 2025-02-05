@@ -173,18 +173,19 @@ vm_ssh "docker load < ~/promptwars_${RUN_ID}.tar" || exit 1
 # Cleanup
 rm "$TEMP_TAR"
 
-# Run multiple games in parallel
+# Run games sequentially
 for i in $(seq 1 $NUM_GAMES); do
     # Create unique game directory within the run directory
     GAME_DIR="$RUN_DIR/game_$i"
     mkdir -p "$GAME_DIR"
     
+    log "Starting game $i of $NUM_GAMES"
     log "Created game directory: $GAME_DIR"
     
     # Create the directory on the VM using run ID
     vm_ssh "mkdir -p /tmp/$RUN_ID/game_$i/agent_logs /tmp/$RUN_ID/game_$i/root_logs" || exit 1
     
-    # Run container on the VM
+    # Run container on the VM and wait for it to complete
     vm_ssh "docker run --rm \
         --privileged \
         --cap-add ALL \
@@ -197,27 +198,15 @@ for i in $(seq 1 $NUM_GAMES); do
         promptwars \
         sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS $SIMULTANEOUS_TURNS_ARG --game-type $GAME_TYPE --max-turns $MAX_TURNS ${AGENT_CONFIGS[*]}\" \
         > /tmp/$RUN_ID/game_$i/game.log \
-        2> /tmp/$RUN_ID/game_$i/game_err.log" \
-        </dev/null > "$GAME_DIR/ssh.log" 2> "$GAME_DIR/ssh_err.log" &
-done
-
-# Wait for all games to complete by checking for running containers
-log "Waiting for games to complete..."
-while true; do
+        2> /tmp/$RUN_ID/game_$i/game_err.log"
+    
+    # Wait for game logs
     sleep 10
-    RUNNING_CONTAINERS=$(vm_ssh "docker ps --filter ancestor=promptwars -q" | wc -l)
-    if [ "$RUNNING_CONTAINERS" -eq 0 ]; then
-        log "All games finished"
-        break
-    else
-        log "Still running: $RUNNING_CONTAINERS containers..."
-    fi
-done
 
-# Copy logs back from VM for all completed games
-for i in $(seq 1 $NUM_GAMES); do
-    GAME_DIR="$RUN_DIR/game_$i"
+    # Copy logs back from VM for the completed game
     vm_scp -r "myuser@localhost:/tmp/$RUN_ID/game_$i/*" "$GAME_DIR/" || echo "Warning: No logs found for game $i"
+    
+    log "Completed game $i of $NUM_GAMES"
 done
 
 log "All games completed"

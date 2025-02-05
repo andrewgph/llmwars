@@ -218,7 +218,7 @@ def main():
         llm_server, file_monitor, temp_config_path = start_services(api_key_configs, args.simultaneous_turns)
 
         # Wait for services to start
-        time.sleep(2)
+        time.sleep(5)
         
         # Start each agent with its API key
         agents = []
