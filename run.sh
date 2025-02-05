@@ -158,17 +158,17 @@ log "VM is ready"
 RUN_ID=$(openssl rand -hex 4)
 
 # Build the Docker image locally
-docker build -t promptwars .
+docker build -t llmwars .
 
 # Save the Docker image to a temporary tar file
-TEMP_TAR="/tmp/promptwars_${RUN_ID}.tar"
-docker save promptwars > "$TEMP_TAR"
+TEMP_TAR="/tmp/llmwars_${RUN_ID}.tar"
+docker save llmwars > "$TEMP_TAR"
 
 # Copy the Docker image to the VM
 vm_scp "$TEMP_TAR" myuser@localhost:~/ || exit 1
 
 # Load the Docker image on the VM
-vm_ssh "docker load < ~/promptwars_${RUN_ID}.tar" || exit 1
+vm_ssh "docker load < ~/llmwars_${RUN_ID}.tar" || exit 1
 
 # Cleanup
 rm "$TEMP_TAR"
@@ -195,7 +195,7 @@ for i in $(seq 1 $NUM_GAMES); do
         -v /tmp/$RUN_ID/game_$i/agent_logs:/agent_logs \
         -v /tmp/$RUN_ID/game_$i/root_logs:/root_logs \
         --pid=host \
-        promptwars \
+        llmwars \
         sh -c \"python3 -u game.py --game-timeout-seconds $TIMEOUT_SECONDS $SIMULTANEOUS_TURNS_ARG --game-type $GAME_TYPE --max-turns $MAX_TURNS ${AGENT_CONFIGS[*]}\" \
         > /tmp/$RUN_ID/game_$i/game.log \
         2> /tmp/$RUN_ID/game_$i/game_err.log"
