@@ -3,6 +3,5 @@ anthropic
 python-dotenv
 flask[async]
 requests
-watchdog
 openai
 google-genai

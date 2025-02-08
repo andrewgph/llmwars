@@ -150,19 +150,7 @@ def start_services(api_key_configs, simultaneous_turns):
         }
     )
     
-    # Start file monitor
-    file_monitor = subprocess.Popen(
-        [sys.executable, "-u", os.environ.get('ROOT_SPACE') + "/file_monitor.py"],
-        stdout=open(os.environ.get('ROOT_LOGS') + "/file_monitor.log", 'w', buffering=1),
-        stderr=open(os.environ.get('ROOT_LOGS') + "/file_monitor_error.log", 'w', buffering=1),
-        universal_newlines=True,
-        env={
-            "ROOT_LOGS": os.environ["ROOT_LOGS"],
-            "AGENT_SPACE": os.environ["AGENT_SPACE"]
-        }
-    )
-    
-    return llm_server, file_monitor, temp_config.name
+    return llm_server, temp_config.name
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -215,7 +203,7 @@ def main():
                 agent_configs.append((agent_config_file, api_key))
         
         # Start services with API key configs
-        llm_server, file_monitor, temp_config_path = start_services(api_key_configs, args.simultaneous_turns)
+        llm_server, temp_config_path = start_services(api_key_configs, args.simultaneous_turns)
 
         # Wait for services to start
         time.sleep(5)
@@ -280,7 +268,6 @@ def main():
     finally:
         # Cleanup
         llm_server.terminate()
-        file_monitor.terminate()
         process_monitor.stop()
         # Remove temporary config file
         os.unlink(temp_config_path)
