@@ -274,6 +274,9 @@ def main():
             }, f)
             f.flush()
             os.fsync(f.fileno())
+
+        # Add a small delay to ensure the game result is written
+        time.sleep(5)
     finally:
         # Cleanup
         llm_server.terminate()
