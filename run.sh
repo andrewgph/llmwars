@@ -2,7 +2,7 @@
 
 # Get the directory where the script is located
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-QEMU_VM_DIR="$SCRIPT_DIR/qemu_vm_files"
+QEMU_VM_DIR="$SCRIPT_DIR/qemu_vm/files"
 
 # Parse command line arguments
 NUM_GAMES=1

@@ -9,4 +9,4 @@ game_runs/
 promptwars.tar
 
 # QEMU VM
-qemu_vm_files/
+qemu_vm/files/

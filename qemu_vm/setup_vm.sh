@@ -3,7 +3,7 @@
 SCRIPT_DIR=$(dirname "$0")
 
 VM_NAME="ubuntu-server-24"
-QEMU_VM_DIR="$SCRIPT_DIR/qemu_vm_files"
+QEMU_VM_DIR="$SCRIPT_DIR/files"
 DISK_FILE="$QEMU_VM_DIR/ubuntu-vm.qcow2"
 ISO_FILE="$QEMU_VM_DIR/cloud-init.iso"
 RAM="4G"
@@ -28,7 +28,7 @@ PUBLIC_KEY=$(cat "${SSH_KEY_PATH}.pub")
 
 # Create a new user-data file with the SSH key
 USER_DATA_FILE="$QEMU_VM_DIR/user-data"
-sed "s|ssh-rsa.*|$PUBLIC_KEY|" "$SCRIPT_DIR/qemu_vm_config/user-data" > "$USER_DATA_FILE"
+sed "s|ssh-rsa.*|$PUBLIC_KEY|" "$SCRIPT_DIR/config/user-data" > "$USER_DATA_FILE"
 
 # Create a function/alias for cloud-localds using Docker
 cloud-localds() {
@@ -39,7 +39,7 @@ cloud-localds() {
 }
 
 rm "$ISO_FILE"
-cloud-localds "$ISO_FILE" "$USER_DATA_FILE" "$SCRIPT_DIR/qemu_vm_config/meta-data"
+cloud-localds "$ISO_FILE" "$USER_DATA_FILE" "$SCRIPT_DIR/config/meta-data"
 
 # Function to cleanup VM on script exit
 cleanup() {
