@@ -153,14 +153,12 @@ class Agent:
             logger.error("Failed to generate code")
             return
 
-        # Extract code from markdown code blocks if present
         if "```python" in response:
             code_block = response.split("```python")[1].split("```")[0].strip()
         else:
             logger.info(f"No code block found in response: {response}")
             return
     
-        # Check if code block is empty after stripping
         if not code_block.strip():
             logger.info("Empty code block found in response")
             return
