@@ -212,4 +212,4 @@ done
 log "All games completed"
 
 # Run analysis script with the specific run directory
-python3 analyze_games.py "$RUN_DIR"
+python3 utils/analyze_games.py "$RUN_DIR"
