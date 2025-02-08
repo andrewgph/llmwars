@@ -1,18 +1,15 @@
 import logging
 import os
-import subprocess
-import sys
-import time
-import uuid
-
-from dotenv import load_dotenv
 import psutil
+import subprocess
+import uuid
+from dataclasses import dataclass
+from dotenv import load_dotenv
 
 from llm_client import LLMClient
 
 load_dotenv()
 
-# Add logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -39,21 +36,22 @@ The requirements.txt includes the following packages:
 You can generate additional Python programs to achieve your goal. On each update, you will be given the current list of active subprocesses and the last 10 lines of their stdout and stderr logs, and the ability to generate a new Python program to run in a separate process.
 
 The Python program should be marked using ```python tags.
+
+Also include a summary of the reasoning behind the new process you are spawning.
 """
 
 NEXT_MOVE_PROMPT = """
-Last response status: {last_response_status}
+Last response status:
+{last_response_status}
 
-Current active child processes:
+Child processes status:
 {child_process_status}
 
-stdout and stderr logs for each child process:
+stdout and stderr logs for each child process (only last 10 lines shown):
 {child_process_logs}
 
 Generate a new Python program to run in a separate process, or not if you don't think a new process is needed.
 """
-
-from dataclasses import dataclass
 
 @dataclass
 class ChildProcess:
@@ -71,11 +69,10 @@ class Agent:
         self.child_processes = []
 
     def _generate_initial_messages(self, game_description: str):
-        # Get the path of the currently executing script
         current_script_path = os.path.abspath(__file__)
         agent_code = open(current_script_path, "r").read()
         requirements_txt = open("requirements.txt", "r").read()
-        
+
         user_message = {
             "role": "user",
             "content": GAME_PROMPT.format(
@@ -91,39 +88,35 @@ class Agent:
             "role": "assistant",
             "content": "Understood."
         }
-        
+
         return [user_message, assistant_message]
     
     def _check_child_processes(self):
         process_table = []
         for child in self.child_processes:
             try:
-                # Check if process is still running
                 process = psutil.Process(child.pid)
                 status = "RUNNING" if process.is_running() else "STOPPED"
             except psutil.NoSuchProcess:
                 status = "TERMINATED"
-            
             process_table.append(f"{child.filename} | {child.pid} | {status}")
-        
+
         if not process_table:
             return "No active child processes"
-        
+
         return "Script | PID | Status\n" + "\n".join(process_table)
 
     def _get_child_process_logs(self):
         logs = []
         for child in self.child_processes:
             logs.append(f"child process id {child.pid}")
-            
-            # Get last 10 lines of stdout
+
             logs.append(f"stdout log filename {child.stdout_filepath} last 10 lines:")
             with open(child.stdout_filepath, "r") as f:
                 lines = f.readlines()
                 last_10 = lines[-10:] if len(lines) >= 10 else lines
                 logs.append("".join(last_10))
-            
-            # Get last 10 lines of stderr
+
             logs.append(f"stderr log filename {child.stderr_filepath} last 10 lines:")
             with open(child.stderr_filepath, "r") as f:
                 lines = f.readlines()
@@ -131,13 +124,12 @@ class Agent:
                 logs.append("".join(last_10))
 
             logs.append("")
-            
+
         return "\n".join(logs)
 
     def _get_env_update_message(self):
         child_process_status = self._check_child_processes()
         child_process_logs = self._get_child_process_logs()
-        
         return NEXT_MOVE_PROMPT.format(
             last_response_status=self.last_response_status if self.last_response_status else "N/A",
             child_process_status=child_process_status,
@@ -185,8 +177,7 @@ class Agent:
                 f.write(code_block)
 
             logger.info(f"Wrote code to {new_process_file}")
-            
-            # Spawn new process with separate stdout and stderr logs
+
             process = subprocess.Popen(
                 ["/usr/bin/python3", new_process_file],
                 stdout=stdout_file,
@@ -215,8 +206,6 @@ class Agent:
         while True:
             logger.info(f"agent.py is running. Process ID: {os.getpid()}, User ID: {os.getuid()}")
             self._spawn_new_process()
-            # No need for sleep as LLM requests take time
-            # time.sleep(1)
 
 def main():
     logger.info(f"agent.py Process ID: {os.getpid()}, User ID: {os.getuid()}")
