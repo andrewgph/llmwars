@@ -16,11 +16,9 @@ class EbpfMonitor:
         self.running = False
         self.monitor_thread = None
         self.uids = uids
-        
-        # Setup logging for this module
+
         self.logger = logging.getLogger(__name__)
-        
-        # Initialize empty events log
+
         self._save_events()
     
     def _save_events(self):
@@ -84,19 +82,22 @@ class EbpfMonitor:
                 self.logger.warning(f"Failed to attach to probe {probe}: {str(e)}")
         if not attached:
             raise Exception("Could not attach to any execve probe points. Is BPF supported and enabled?")
-        
-        # Attach kprobe for do_exit
+
         try:
             self.bpf.attach_kprobe(event="do_exit", fn_name="trace_exit")
         except Exception as e:
             self.logger.error(f"Failed to attach exit probe: {str(e)}")
         
         try:
-            self.bpf.attach_tracepoint(tp="syscalls:sys_enter_kill", fn_name="trace_kill_tp")
+            self.bpf.attach_tracepoint(tp="syscalls:sys_enter_kill", fn_name="tracepoint__syscalls__sys_enter_kill")
         except Exception as e:
-            self.logger.error(f"Failed to attach kill tracepoint: {str(e)}")
-        
-        # Open perf buffer
+            self.logger.error(f"Failed to attach enter kill tracepoint: {str(e)}")
+
+        try:
+            self.bpf.attach_tracepoint(tp="syscalls:sys_exit_kill", fn_name="tracepoint__syscalls__sys_exit_kill")
+        except Exception as e:
+            self.logger.error(f"Failed to attach exit kill tracepoint: {str(e)}")
+
         self.bpf["events"].open_perf_buffer(self._process_event)
         
         while self.running:
