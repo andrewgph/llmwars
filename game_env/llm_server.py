@@ -209,6 +209,13 @@ async def generate():
     logger.info(f"Generating response for agent: {agent_config['name']}, using model: {agent_config['model']}")
     
     try:
+        # Log the request details before processing
+        logger.info(f"Request details for {agent_config['name']}:")
+        logger.info(f"API key: {api_key}")
+        logger.info(f"Provider: {agent_config['provider']}")
+        logger.info(f"Model: {agent_config['model']}")
+        logger.info(f"Messages: {json.dumps(messages, indent=2)}")
+        
         if agent_config['provider'] == 'anthropic':
             response_text = generate_claude_response(messages, agent_config['model'])
         elif agent_config['provider'] == 'openai':
@@ -255,7 +262,7 @@ async def generate():
             # Normal single-response mode
             return jsonify({"text": response_text})
     except Exception as e:
-        logger.error(f"Error generating response: {str(e)}", exc_info=True)
+        logger.error(f"Error generating response for {agent_config['name']} with {agent_config['provider']}: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/turn_count', methods=['GET'])

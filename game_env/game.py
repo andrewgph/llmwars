@@ -130,6 +130,9 @@ def game_loop(agents: List[Agent], max_turns: int, timeout_seconds: int):
             logging.info("Game timeout reached. Exiting.")
             return
 
+        # Short delay between checks
+        time.sleep(0.1)
+
 def start_services(api_key_configs, simultaneous_turns):
     # Create temporary config file for LLM server
     temp_config = tempfile.NamedTemporaryFile(mode='w', delete=False)
