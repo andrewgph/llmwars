@@ -69,25 +69,24 @@ def process_game_result(game_dir):
     # agent_processes: Dict[agent_id, List[pid]]
     agent_processes = {}
 
-    # Initialize with root agent processes from game results
-    for agent in game_result['agents']:
-        agent_processes[agent['id']] = [agent['pid']]
-
-    # Populate child PIDs via events
+    # First build complete map of parent-child relationships
+    process_children = defaultdict(list)
     for event in process_events:
         if event['type'] == 'E':
             ppid = event['ppid']
             pid = event['pid']
-            for a_id, pid_list in agent_processes.items():
-                if ppid in pid_list:
-                    pid_list.append(pid)
+            process_children[ppid].append(pid)
 
-    # Remove the top-level su process from each agent's list
-    # (Assumes the first item in agent_processes is su or similar)
-    # We do a defensive check in case any list is empty.
-    for a_id, pid_list in agent_processes.items():
-        if pid_list:
-            pid_list.pop(0)
+    # Now populate agent_processes using the complete process hierarchy
+    def add_children_recursive(pid, pid_list):
+        pid_list.append(pid)
+        for child_pid in process_children[pid]:
+            add_children_recursive(child_pid, pid_list)
+
+    # Initialize with root agent processes and recursively add all children
+    for agent in game_result['agents']:
+        agent_processes[agent['id']] = []
+        add_children_recursive(agent['pid'], agent_processes[agent['id']])
 
     logging.info(f"Agent processes: {agent_processes}")
 
@@ -96,19 +95,24 @@ def process_game_result(game_dir):
         # Agent key in the stats dictionary
         agent_key = (agent['name'], agent['id'])
 
-        # We assume the next two PIDs are su+sh or similar root processes.
-        # This is fragile if the chain differs from su->sh->python3
-        agent_root_pids = agent_processes[agent['id']][:2] if agent['id'] in agent_processes else []
-
-        # Find kill events for these root pids (we only consider the first kill event encountered)
+        # Find kill events related to this agent and sort by timestamp
         kill_events = [
             evt for evt in process_events
-            if evt['type'] == 'K' and evt.get('kill_pid') in agent_root_pids
+            if evt['type'] == 'K' and evt.get('kill_pid') in agent_processes[agent['id']]
         ]
+        kill_events.sort(key=lambda evt: evt['timestamp'])
 
-        if kill_events:
-            # We only consider the first relevant kill
-            killer_event = kill_events[0]
+        # The game result is the ground truth.
+        # If the agent was killed, there should be at least one kill event.
+        if agent['was_killed'] and (len(kill_events) == 0):
+            raise Exception(f"Kill events for {agent['name']} (ID: {agent['id']}) do not match game result in {game_dir}. "
+            "The agent was killed but no kill events were found.")
+
+        # Only consider the kill events if the game result says the agent was killed
+        # Otherwise, it's possible that the kill event wasn't fatal for the agent
+        if kill_events and agent['was_killed']:
+            # Assume that the last kill event for an agent process or subprocess was the one that ultimately killed the agent
+            killer_event = kill_events[-1]
             killer_pid = killer_event['pid']
 
             # Identify which agent did the killing (if any)
