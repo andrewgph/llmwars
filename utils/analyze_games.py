@@ -30,10 +30,29 @@ def create_table(headers, data):
     result.append(separator)
     return '\n'.join(result)
 
-def process_game_result(result_file, process_events_file):
+def process_game_result(game_dir):
     """
     Reads a single game's result and process events, then compiles stats for each agent.
     """
+    result_file = game_dir / 'root_logs/game_result.json'
+    if not result_file.exists():
+        raise FileNotFoundError(f"Missing game result file in {game_dir}")
+
+    process_events_file = game_dir / 'root_logs/process_events.json'
+    if not process_events_file.exists():
+        raise FileNotFoundError(f"Missing process events file in {game_dir}")
+
+    try:
+        with open(result_file) as f:
+            game_result = json.load(f)
+    except Exception as e:
+        raise Exception(f"Error reading {result_file}: {e}")
+
+    try:
+        with open(process_events_file) as f:
+            process_events = json.load(f)
+    except Exception as e:
+        raise Exception(f"Error reading {process_events_file}: {e}")
 
     # Initialize game-specific stats (including the new tripwire_kills field)
     game_stats = defaultdict(lambda: {
@@ -45,24 +64,6 @@ def process_game_result(result_file, process_events_file):
         'kills': 0,
         'tripwire_kills': 0
     })
-
-    # Load game result (agent info)
-    try:
-        with open(result_file) as f:
-            game_result = json.load(f)
-    except Exception as e:
-        logging.error(f"Error reading {result_file}: {e}")
-        # Return a consistent empty dictionary if we can't read result_file
-        return {}
-
-    # Load process events
-    try:
-        with open(process_events_file) as f:
-            process_events = json.load(f)
-    except Exception as e:
-        logging.error(f"Error reading {process_events_file}: {e}")
-        # Return a consistent empty dictionary if we can't read process_events_file
-        return {}
 
     # Build process hierarchy and track agent processes
     # agent_processes: Dict[agent_id, List[pid]]
@@ -146,6 +147,30 @@ def process_game_result(result_file, process_events_file):
         # Agent always has a 'total' increment (survived or killed)
         game_stats[agent_key]['total'] += 1
 
+    # Compare game_stats with the game_result
+    for agent in game_result['agents']:
+        agent_key = (agent['name'], agent['id'])
+        
+        # Compare was_killed with our calculated stats
+        was_killed = agent['was_killed']
+        calculated_killed = game_stats[agent_key]['killed'] > 0
+        
+        if was_killed != calculated_killed:
+            raise ValueError(
+                f"Inconsistency detected for agent {agent['name']} (ID: {agent['id']}) in {game_dir}:\n"
+                f"Game result shows was_killed={was_killed}, but calculated stats show "
+                f"killed={calculated_killed} (survived={game_stats[agent_key]['survived']}, "
+                f"killed={game_stats[agent_key]['killed']})"
+            )
+
+    # Remove tripwire agents from game_stats
+    tripwire_keys = [
+        agent_key for agent_key in list(game_stats.keys())
+        if next((a for a in game_result['agents'] if a['id'] == agent_key[1] and a.get('is_tripwire', False)), None)
+    ]
+    for key in tripwire_keys:
+        del game_stats[key]
+
     return game_stats
 
 def analyze_game_results(base_dir):
@@ -182,18 +207,10 @@ def analyze_game_results(base_dir):
     for game_dir in game_dirs:
         logging.info(f"Processing game directory: {game_dir}")
 
-        result_file = game_dir / 'root_logs/game_result.json'
-        if not result_file.exists():
-            logging.warning(f"Missing game result file in {game_dir}")
-            continue
 
-        process_events_file = game_dir / 'root_logs/process_events.json'
-        if not process_events_file.exists():
-            logging.warning(f"Missing process events file in {game_dir}")
-            continue
 
         # Get this game's stats
-        game_stats = process_game_result(result_file, process_events_file)
+        game_stats = process_game_result(game_dir)
         if not game_stats:
             # If process_game_result failed or returned an empty dict, skip
             continue
@@ -210,30 +227,15 @@ def analyze_game_results(base_dir):
             for stat_name, stat_value in agent_stats.items():
                 cumulative_stats[(agent_name, agent_id)][stat_name] += stat_value
 
-        # Check tripwire status in the same game_result
-        try:
-            with open(result_file) as f:
-                game_result_data = json.load(f)
-                for agent in game_result_data['agents']:
-                    if agent.get('is_tripwire', False):
-                        tripwire_agents.add(agent['id'])
-        except Exception as e:
-            # Not strictly fatal, just log and continue
-            logging.error(f"Error reading tripwire status in {result_file}: {e}")
-
     # Prepare table data
     headers = [
         'Agent', 'ID', 'Survived', 'Killed', 'Self Kills',
-        'Opponent Kills', 'Kills', 'Tripwire Kills', 'Total Games', 'Survival Rate'
+        'Killed by Other', 'Kills', 'Tripwire Kills', 'Total Games', 'Survival Rate'
     ]
     table_data = []
 
     # Build rows for non-tripwire agents
     for (agent_name, agent_id), data in cumulative_stats.items():
-        if agent_id in tripwire_agents:
-            # Skip tripwire agents in the final summary
-            continue
-
         total_games = data['total']
         survived = data['survived']
         survival_rate = (survived / total_games * 100) if total_games > 0 else 0.0
