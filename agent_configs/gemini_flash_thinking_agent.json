@@ -1,6 +1,5 @@
 {
     "name": "gemini_flash_thinking_agent",
-    "agent_path": "agent.py",
     "provider": "gemini",
     "model": "gemini-2.0-flash-thinking-exp"
 }

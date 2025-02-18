@@ -1,4 +1,3 @@
 {
-    "name": "noop-agent",
-    "agent_path": "noop.py"
+    "name": "noop-agent"
 }
